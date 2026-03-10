@@ -1,0 +1,592 @@
+diff --git a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+index 03baf8e3..dfb6a97b 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
++++ b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+@@ -15,6 +15,7 @@
+ 		68BA582A244B693400B53811 /* TurnipsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68BA5829244B693300B53811 /* TurnipsViewModel.swift */; };
+ 		68BA582C244B695F00B53811 /* IslandDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68BA582B244B695F00B53811 /* IslandDetailViewModel.swift */; };
+ 		68BA5831244B738700B53811 /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 68BA5830244B738700B53811 /* SDWebImageSwiftUI */; };
++		68BA5834244B9D4100B53811 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68BA5833244B9D4100B53811 /* DashboardView.swift */; };
+ 		68DFFFA9244927A400DEA07F /* NookazonService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68DFFFA8244927A400DEA07F /* NookazonService.swift */; };
+ 		68DFFFAB244927CA00DEA07F /* Listing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68DFFFAA244927CA00DEA07F /* Listing.swift */; };
+ 		68DFFFAD24492D7F00DEA07F /* ItemDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68DFFFAC24492D7F00DEA07F /* ItemDetailViewModel.swift */; };
+@@ -49,6 +50,7 @@
+ 		692C2C372444448E00E5B818 /* nookmiles in Resources */ = {isa = PBXBuildFile; fileRef = 692C2C1A2444448E00E5B818 /* nookmiles */; };
+ 		693E0B19244C2B8400D20E46 /* UserDefaultWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 693E0B18244C2B8400D20E46 /* UserDefaultWrapper.swift */; };
+ 		693E0B1B244C2B9300D20E46 /* AppUserDefault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 693E0B1A244C2B9300D20E46 /* AppUserDefault.swift */; };
++		693E0B1D244C315B00D20E46 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 693E0B1C244C315B00D20E46 /* DashboardViewModel.swift */; };
+ 		6942FC37244988F80062FE8F /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6942FC36244988F80062FE8F /* SafariView.swift */; };
+ 		6942FC3A244989530062FE8F /* ListingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6942FC39244989530062FE8F /* ListingRow.swift */; };
+ 		697E63EE2449A365008FB710 /* ACNHApiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 697E63ED2449A365008FB710 /* ACNHApiService.swift */; };
+@@ -92,6 +94,7 @@
+ 		68BA5827244B646C00B53811 /* IslandDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandDetailView.swift; sourceTree = "<group>"; };
+ 		68BA5829244B693300B53811 /* TurnipsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsViewModel.swift; sourceTree = "<group>"; };
+ 		68BA582B244B695F00B53811 /* IslandDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandDetailViewModel.swift; sourceTree = "<group>"; };
++		68BA5833244B9D4100B53811 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+ 		68DFFFA8244927A400DEA07F /* NookazonService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NookazonService.swift; sourceTree = "<group>"; };
+ 		68DFFFAA244927CA00DEA07F /* Listing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listing.swift; sourceTree = "<group>"; };
+ 		68DFFFAC24492D7F00DEA07F /* ItemDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemDetailViewModel.swift; sourceTree = "<group>"; };
+@@ -127,6 +130,7 @@
+ 		692C2C1A2444448E00E5B818 /* nookmiles */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = nookmiles; sourceTree = "<group>"; };
+ 		693E0B18244C2B8400D20E46 /* UserDefaultWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaultWrapper.swift; sourceTree = "<group>"; };
+ 		693E0B1A244C2B9300D20E46 /* AppUserDefault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUserDefault.swift; sourceTree = "<group>"; };
++		693E0B1C244C315B00D20E46 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
+ 		6942FC36244988F80062FE8F /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
+ 		6942FC39244989530062FE8F /* ListingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingRow.swift; sourceTree = "<group>"; };
+ 		697E63ED2449A365008FB710 /* ACNHApiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ACNHApiService.swift; sourceTree = "<group>"; };
+@@ -187,6 +191,15 @@
+ 			path = turnips;
+ 			sourceTree = "<group>";
+ 		};
++		68BA5832244B9D2F00B53811 /* dashboard */ = {
++			isa = PBXGroup;
++			children = (
++				693E0B1C244C315B00D20E46 /* DashboardViewModel.swift */,
++				68BA5833244B9D4100B53811 /* DashboardView.swift */,
++			);
++			path = dashboard;
++			sourceTree = "<group>";
++		};
+ 		692C2BFD2444445E00E5B818 /* json */ = {
+ 			isa = PBXGroup;
+ 			children = (
+@@ -314,6 +327,7 @@
+ 		69AF8C64243E2857001DD9CB /* views */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				68BA5832244B9D2F00B53811 /* dashboard */,
+ 				697E63FE244AD664008FB710 /* settings */,
+ 				687B5765244A02E400C1E86F /* turnips */,
+ 				697E63F32449A488008FB710 /* villagers */,
+@@ -544,6 +558,7 @@
+ 				697E63F22449A406008FB710 /* Villager.swift in Sources */,
+ 				693E0B19244C2B8400D20E46 /* UserDefaultWrapper.swift in Sources */,
+ 				69AF8C51243E283D001DD9CB /* AppDelegate.swift in Sources */,
++				68BA5834244B9D4100B53811 /* DashboardView.swift in Sources */,
+ 				697E63F92449DADE008FB710 /* VillagerRowView.swift in Sources */,
+ 				697E63EE2449A365008FB710 /* ACNHApiService.swift in Sources */,
+ 				69AF8C53243E283D001DD9CB /* SceneDelegate.swift in Sources */,
+@@ -555,6 +570,7 @@
+ 				693E0B1B244C2B9300D20E46 /* AppUserDefault.swift in Sources */,
+ 				69BEA989243E68D400F02C61 /* CollectionViewModel.swift in Sources */,
+ 				6942FC37244988F80062FE8F /* SafariView.swift in Sources */,
++				693E0B1D244C315B00D20E46 /* DashboardViewModel.swift in Sources */,
+ 				69AF8C7C243E4D29001DD9CB /* Color.swift in Sources */,
+ 				69AF8C55243E283D001DD9CB /* ItemsListView.swift in Sources */,
+ 				69BEA98B243EFE9700F02C61 /* ItemDetailView.swift in Sources */,
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/.DS_Store b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/.DS_Store
+index 1ec416f1..d3c41afc 100644
+Binary files a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/.DS_Store and b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/.DS_Store differ
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-bells.imageset/MoneyBag010.png b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-bells.imageset/MoneyBag010.png
+index d7a9853e..1d8eb0b0 100644
+Binary files a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-bells.imageset/MoneyBag010.png and b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-bells.imageset/MoneyBag010.png differ
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-gold.imageset/Contents.json b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-gold.imageset/Contents.json
+index 6a576a9e..75cd2104 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-gold.imageset/Contents.json
++++ b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-gold.imageset/Contents.json
+@@ -1,11 +1,11 @@
+ {
+   "images" : [
+     {
+-      "filename" : "Gold_Ore.png",
+       "idiom" : "universal",
+       "scale" : "1x"
+     },
+     {
++      "filename" : "Gold_Ore.png",
+       "idiom" : "universal",
+       "scale" : "2x"
+     },
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-hardwood.imageset/Contents.json b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-hardwood.imageset/Contents.json
+index 6bfe2b23..bd685f9b 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-hardwood.imageset/Contents.json
++++ b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-hardwood.imageset/Contents.json
+@@ -1,11 +1,11 @@
+ {
+   "images" : [
+     {
+-      "filename" : "DIYWoodHard.png",
+       "idiom" : "universal",
+       "scale" : "1x"
+     },
+     {
++      "filename" : "DIYWoodHard.png",
+       "idiom" : "universal",
+       "scale" : "2x"
+     },
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-helm.imageset/Contents.json b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-helm.imageset/Contents.json
+index 9dbdcc8d..a266a2a9 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-helm.imageset/Contents.json
++++ b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-helm.imageset/Contents.json
+@@ -1,11 +1,11 @@
+ {
+   "images" : [
+     {
+-      "filename" : "Cap.png",
+       "idiom" : "universal",
+       "scale" : "1x"
+     },
+     {
++      "filename" : "Cap.png",
+       "idiom" : "universal",
+       "scale" : "2x"
+     },
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-wallpaper.imageset/Contents.json b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-wallpaper.imageset/Contents.json
+index 7b6dcd84..c98ee62f 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-wallpaper.imageset/Contents.json
++++ b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-wallpaper.imageset/Contents.json
+@@ -1,11 +1,11 @@
+ {
+   "images" : [
+     {
+-      "filename" : "Wall.png",
+       "idiom" : "universal",
+       "scale" : "1x"
+     },
+     {
++      "filename" : "Wall.png",
+       "idiom" : "universal",
+       "scale" : "2x"
+     },
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/models/Categories.swift b/ACHNBrowserUI/ACHNBrowserUI/models/Categories.swift
+index 5a1b8e12..b27fabb9 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/models/Categories.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/models/Categories.swift
+@@ -96,9 +96,14 @@ enum Categories: String, CaseIterable {
+     }
+     
+     static func nature() -> [Categories] {
+-        if AppUserDefaults.hemisphere == "north" {
+-            return [.bugsNorth, .fishesNorth, .fossils]
+-        }
+-        return [.bugsSouth, .fishesSouth, .fossils]
++        return [fish(), bugs(), .fossils]
++    }
++    
++    static func fish() -> Categories {
++        AppUserDefaults.hemisphere == "north" ? .fishesNorth : .fishesSouth
++    }
++    
++    static func bugs() -> Categories {
++        AppUserDefaults.hemisphere == "north" ? .bugsNorth : .bugsSouth
+     }
+ }
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/models/Listing.swift b/ACHNBrowserUI/ACHNBrowserUI/models/Listing.swift
+index 14c869a1..8d39c2b5 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/models/Listing.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/models/Listing.swift
+@@ -24,6 +24,7 @@ struct Listing: Decodable, Identifiable {
+     
+     var id: String
+     var itemId: String
++    var name: String?
+     var amount: Int
+     var active: Bool
+     var selling: Bool
+@@ -31,6 +32,7 @@ struct Listing: Decodable, Identifiable {
+     var needMaterials: Bool
+     var username: String
+     var discord: String?
++    var img: URL?
+     var status: Status?
+     var prices: [Pricing]?
+     var rating: String?
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/services/NookazonService.swift b/ACHNBrowserUI/ACHNBrowserUI/services/NookazonService.swift
+index 054c9409..03b91c27 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/services/NookazonService.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/services/NookazonService.swift
+@@ -30,4 +30,12 @@ struct NookazonService {
+             .map { $0.listings }
+             .eraseToAnyPublisher()
+     }
++    
++    static func recentListings() -> AnyPublisher<[Listing], Error> {
++        URLSession.shared.dataTaskPublisher(for: URL(string: "https://nookazon.com/api/listings?size=3")!)
++            .map { $0.data }
++            .decode(type: ListingContainer.self, decoder: decoder)
++            .map { $0.listings }
++            .eraseToAnyPublisher()
++    }
+ }
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoriesView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoriesView.swift
+index 7806ca38..0306afa9 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoriesView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoriesView.swift
+@@ -20,6 +20,12 @@ struct CategoriesView: View {
+             Image(systemName: "wrench").imageScale(.medium)
+         })
+     }
++
++    func makeCategories() -> some View {
++        ForEach(categories, id: \.self) { categorie in
++            CategoryRowView(category: categorie)
++        }
++    }
+     
+     func makeWardrobeCell() -> some View {
+         NavigationLink(destination: CategoryDetailView(categories: Categories.wardrobe()).navigationBarTitle("Wardrobe")) {
+@@ -49,12 +55,6 @@ struct CategoriesView: View {
+         }
+     }
+     
+-    func makeCategories() -> some View {
+-        ForEach(categories, id: \.self) { categorie in
+-            CategoryRowView(category: categorie)
+-        }
+-    }
+-    
+     var body: some View {
+         NavigationView {
+             List {
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/dashboard/DashboardView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/dashboard/DashboardView.swift
+new file mode 100644
+index 00000000..9fc7ce85
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/dashboard/DashboardView.swift
+@@ -0,0 +1,173 @@
++//
++//  DashboardView.swift
++//  ACHNBrowserUI
++//
++//  Created by Eric Lewis on 4/18/20.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++import Combine
++import UIKit
++
++struct Progress: UIViewRepresentable {
++    let progress: Float
++    
++    func makeUIView(context: Context) -> UIProgressView {
++        UIProgressView()
++    }
++    
++    func updateUIView(_ uiView: UIProgressView, context: Context) {
++        uiView.progress = progress
++    }
++}
++
++struct DashboardView: View {
++    @EnvironmentObject private var collection: CollectionViewModel
++    @ObservedObject private var viewModel = DashboardViewModel()
++    
++    
++    private func caughtIn(list: [Item]) -> Int {
++        var caught = 0
++        for critter in collection.critters {
++            if list.contains(critter) {
++                caught += 1
++            }
++        }
++        return caught
++    }
++    
++    private var numberOfFish: String {
++        if !viewModel.fishes.isEmpty {
++            return "\(caughtIn(list: viewModel.fishes))/\(viewModel.fishes.count)"
++        }
++        return "Loading..."
++    }
++    
++    private var numberOfBugs: String {
++        if !viewModel.bugs.isEmpty {
++            return "\(caughtIn(list: viewModel.bugs))/\(viewModel.bugs.count)"
++        }
++        return "Loading..."
++    }
++    
++    private var numberOfFossils: String {
++        if !viewModel.fossils.isEmpty {
++            return "\(caughtIn(list: viewModel.fossils))/\(viewModel.fossils.count)"
++        }
++        return "Loading..."
++    }
++    
++    var body: some View {
++        NavigationView {
++            List {
++                makeAvailableCritterSection()
++                makeCritterCollectionProgressSection()
++                makeTopTurnipSection()
++                makeRecentNookazonListings()
++            }
++            .listStyle(GroupedListStyle())
++            .onAppear(perform: viewModel.fetchListings)
++            .onAppear(perform: viewModel.fetchIsland)
++            .onAppear(perform: viewModel.fetchCritters)
++            .navigationBarTitle("Dashboard",
++                                displayMode: .inline)
++        }
++    }
++}
++
++extension DashboardView {
++    func makeAvailableCritterSection() -> some View {
++        Section(header: Text("Critters Active")) {
++            HStack {
++                Spacer()
++                VStack {
++                    Text(numberOfFish)
++                        .font(.largeTitle)
++                        .bold()
++                    Text("Fish")
++                        .font(.caption)
++                        .foregroundColor(.secondary)
++                }
++                Spacer()
++                Divider()
++                Spacer()
++                VStack {
++                    Text(numberOfBugs)
++                        .font(.largeTitle)
++                        .bold()
++                    Text("Bugs")
++                        .font(.caption)
++                        .foregroundColor(.secondary)
++                }
++                Spacer()
++            }
++        }
++    }
++    
++    func makeCritterCollectionProgressSection() -> some View {
++        Section(header: Text("Collection Progress")) {
++            VStack(alignment: .leading) {
++                if !viewModel.fishes.isEmpty &&
++                    !viewModel.bugs.isEmpty &&
++                    !viewModel.fossils.isEmpty {
++                    Text("Fish")
++                        .font(.subheadline)
++                    Progress(progress: Float(caughtIn(list: viewModel.fishes)) / Float(viewModel.fishes.count))
++                    Text("Bugs")
++                        .font(.subheadline)
++                    Progress(progress: Float(caughtIn(list: viewModel.bugs)) / Float(viewModel.bugs.count))
++                    Text("Fossils")
++                        .font(.subheadline)
++                    Progress(progress: Float(caughtIn(list: viewModel.fossils)) / Float(viewModel.fossils.count))
++                } else {
++                    Text("Loading...")
++                }
++            }
++            .padding(.bottom, 10)
++            .padding(.top, 5)
++        }
++        .accentColor(.grass)
++    }
++    
++    func makeTopTurnipSection() -> some View {
++        Section(header: Text("Top Turnip Island")) {
++            if viewModel.island == nil {
++                Text("Loading...")
++                    .foregroundColor(.secondary)
++            }
++            viewModel.island.map {
++                TurnipCell(island: $0)
++            }
++        }
++    }
++    
++    func makeRecentNookazonListings() -> some View {
++        Section(header: Text("Recent Nookazon Listings")) {
++            if viewModel.recentListings == nil {
++                Text("Loading...")
++                    .foregroundColor(.secondary)
++            }
++            viewModel.recentListings.map {
++                ForEach($0) { listing in
++                    VStack(alignment: .leading, spacing: 0) {
++                        HStack {
++                            ItemImage(path: listing.img?.absoluteString, size: 25)
++                                .frame(width: 25, height: 25)
++                            Text(listing.name!)
++                                .font(.headline)
++                                .foregroundColor(.text)
++                        }
++                        ListingRow(listing: listing)
++                    }
++                }
++            }
++        }
++    }
++}
++
++struct DashboardView_Previews: PreviewProvider {
++    static var previews: some View {
++        DashboardView()
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/dashboard/DashboardViewModel.swift b/ACHNBrowserUI/ACHNBrowserUI/views/dashboard/DashboardViewModel.swift
+new file mode 100644
+index 00000000..434b751f
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/dashboard/DashboardViewModel.swift
+@@ -0,0 +1,68 @@
++//
++//  DashboardViewModel.swift
++//  ACHNBrowserUI
++//
++//  Created by Thomas Ricouard on 19/04/2020.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import Foundation
++import Combine
++
++class DashboardViewModel: ObservableObject {
++    @Published var recentListings: [Listing]?
++    @Published var island: Island?
++    
++    @Published var fishes: [Item] = []
++    @Published var bugs: [Item] = []
++    @Published var fossils: [Item] = []
++    
++    var listingCancellable: AnyCancellable?
++    var islandCancellable: AnyCancellable?
++    
++    var bugsApiCancellable: AnyCancellable?
++    var fishesApiCancellable: AnyCancellable?
++    var fossilsApiCancellable: AnyCancellable?
++    
++    func fetchListings() {
++        listingCancellable = NookazonService
++            .recentListings()
++            .receive(on: RunLoop.main)
++            .sink(receiveCompletion: { _ in }) { [weak self] listings in
++                self?.recentListings = listings
++        }
++    }
++    
++    func fetchIsland() {
++        islandCancellable = TurnipExchangeService.shared
++            .fetchIslands()
++            .receive(on: RunLoop.main)
++            .sink(receiveCompletion: { _ in }) { [weak self] islands in
++                self?.island = islands.first
++        }
++    }
++    
++    
++    func fetchCritters() {
++        bugsApiCancellable = NookPlazaAPIService.fetch(endpoint: Categories.bugs())
++            .replaceError(with: ItemResponse(total: 0, results: []))
++            .eraseToAnyPublisher()
++            .map{ $0.results }
++            .receive(on: DispatchQueue.main)
++            .assign(to: \.bugs, on: self)
++        
++        fishesApiCancellable = NookPlazaAPIService.fetch(endpoint: Categories.fish())
++            .replaceError(with: ItemResponse(total: 0, results: []))
++            .eraseToAnyPublisher()
++            .map{ $0.results }
++            .receive(on: DispatchQueue.main)
++            .assign(to: \.fishes, on: self)
++        
++        fossilsApiCancellable = NookPlazaAPIService.fetch(endpoint: .fossils)
++            .replaceError(with: ItemResponse(total: 0, results: []))
++            .eraseToAnyPublisher()
++            .map{ $0.results }
++            .receive(on: DispatchQueue.main)
++            .assign(to: \.fossils, on: self)
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/home/TabbarView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/home/TabbarView.swift
+index 548a5c5f..15cc5af2 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/home/TabbarView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/home/TabbarView.swift
+@@ -10,10 +10,10 @@ import SwiftUI
+ 
+ struct TabbarView: View {
+     enum Tab: Int {
+-        case items, wardrobe, nature, villagers, collection, turnips
++        case dashboard, items, villagers, collection, turnips
+     }
+     
+-    @State var selectedTab = Tab.items
++    @State var selectedTab = Tab.dashboard
+     
+     func tabbarItem(text: String, image: String) -> some View {
+         VStack {
+@@ -25,6 +25,9 @@ struct TabbarView: View {
+     var body: some View {
+         TabView(selection: $selectedTab) {
+             Group {
++                DashboardView().tabItem{
++                    self.tabbarItem(text: "Dashboard", image: "icon-bells")
++                }.tag(Tab.dashboard)
+                 CategoriesView(categories: Categories.items()).tabItem{
+                     self.tabbarItem(text: "Catalog", image: "icon-leaf")
+                 }.tag(Tab.items)
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemImage.swift b/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemImage.swift
+index ea05f1d8..04efbe35 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemImage.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemImage.swift
+@@ -16,7 +16,7 @@ struct ItemImage : View {
+     let size: CGFloat
+     
+     var body: some View {
+-        WebImage(url: path!.starts(with: "http") ? URL(string: path!) : URL(string: "\(Self.SERVICE_URL)\(path!).png"))
++        WebImage(url: path != nil ? path!.starts(with: "http") ? URL(string: path!) : URL(string: "\(Self.SERVICE_URL)\(path!).png") : nil)
+             .resizable()
+             .renderingMode(.original)
+             .indicator(.activity) 
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/listing/ListingRow.swift b/ACHNBrowserUI/ACHNBrowserUI/views/listing/ListingRow.swift
+index 6461b0ea..bcd6d01e 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/listing/ListingRow.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/listing/ListingRow.swift
+@@ -21,6 +21,7 @@ struct ListingRow: View {
+                             Image("icon-bells")
+                                 .renderingMode(.original)
+                                 .resizable()
++                                .aspectRatio(contentMode: .fit)
+                                 .frame(width: 25, height: 25)
+                             Text("\(bells)")
+                         }
+@@ -44,6 +45,7 @@ struct ListingRow: View {
+                     Image("icon-bell")
+                         .renderingMode(.original)
+                         .resizable()
++                        .aspectRatio(contentMode: .fit)
+                         .frame(width: 25, height: 25)
+                     Text("Make an Offer")
+                 }
+@@ -53,6 +55,7 @@ struct ListingRow: View {
+                     Image("icon-helmet")
+                         .renderingMode(.original)
+                         .resizable()
++                        .aspectRatio(contentMode: .fit)
+                         .frame(width: 25, height: 25)
+                     Text("Need Materials")
+                 }
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
+index 6f4bd4bf..d29ee271 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
+@@ -14,8 +14,10 @@ struct TurnipCell: View {
+     var body: some View {
+         VStack(alignment: .leading) {
+             Text(island.name)
++                .foregroundColor(.text)
+                 .font(.headline)
+             Text(island.islandTime.description)
++                .foregroundColor(.secondaryText)
+                 .font(.subheadline)
+             HStack {
+                 Spacer()
+@@ -26,6 +28,7 @@ struct TurnipCell: View {
+                 Text("\(island.turnipPrice)")
+                     .font(.largeTitle)
+                     .bold()
++                    .foregroundColor(.text)
+                 Group {
+                     Spacer()
+                     Divider()
+@@ -34,6 +37,7 @@ struct TurnipCell: View {
+                 Text(island.hemisphere.rawValue.localizedCapitalized)
+                     .font(.largeTitle)
+                     .bold()
++                    .foregroundColor(.text)
+                 Spacer()
+             }
+         }

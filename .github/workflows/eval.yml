@@ -1,0 +1,171 @@
+name: Anvil Eval
+run-name: "${{ inputs.agent }} · ${{ inputs.dataset }} · ${{ inputs.model }} · k=${{ inputs.n_attempts }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset:
+        description: "Dataset (repo) to evaluate"
+        required: true
+        type: choice
+        options:
+          - ACHNBrowserUI
+      agent:
+        description: "Agent to use"
+        required: true
+        type: choice
+        options:
+          - mini-swe-agent
+          - oracle
+        default: mini-swe-agent
+      model:
+        description: "Model (only used for mini-swe-agent, ignored for oracle)"
+        required: false
+        type: choice
+        options:
+          - openrouter/anthropic/claude-sonnet-4.6
+          - openrouter/anthropic/claude-opus-4.6
+          - openrouter/anthropic/claude-sonnet-4.5
+          - openrouter/openai/gpt-5.4
+          - openrouter/openai/gpt-5.3-codex
+          - openrouter/openai/gpt-5.2-codex
+          - openrouter/openai/gpt-5.2
+          - openrouter/google/gemini-3.1-pro-preview
+          - openrouter/google/gemini-3-pro-preview
+          - openrouter/qwen/qwen3-coder-next
+          - openrouter/deepseek/deepseek-v3.2
+        default: openrouter/anthropic/claude-sonnet-4.6
+      n_attempts:
+        description: "Number of attempts per task (pass@k)"
+        required: true
+        type: number
+        default: 4
+
+env:
+  DATASET_PATH: "datasets/${{ inputs.dataset }}"
+  TASKS_PATH: "tasks/${{ inputs.dataset }}"
+  RESULTS_PATH: "gha_runs/${{ inputs.dataset }}"
+
+permissions:
+  contents: write
+
+jobs:
+  eval:
+    runs-on: macos-15
+    timeout-minutes: 240
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /Applications/Xcode_16.0.app /Applications/Xcode_16.1.app
+          sudo rm -rf /Library/Developer/CoreSimulator/Profiles/Runtimes/*.simruntime
+          df -h
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Install iOS Simulator runtime
+        run: |
+          xcrun simctl list > /dev/null
+          xcodebuild -downloadPlatform iOS
+          xcrun simctl boot "iPhone 17 Pro" 2>/dev/null || true
+          xcrun simctl list devices booted
+
+- name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Python deps
+        run: uv sync
+
+      - name: Clone source repo
+        run: |
+          REPO_URL=$(head -1 "${{ env.TASKS_PATH }}/repo.md" | grep -oE 'https://github\.com/[^ ]+')
+          if [ -z "$REPO_URL" ]; then
+            echo "::error::Could not extract repo URL from ${{ env.TASKS_PATH }}/repo.md"
+            exit 1
+          fi
+          echo "Cloning $REPO_URL into repos/${{ inputs.dataset }}"
+          git clone "$REPO_URL" "repos/${{ inputs.dataset }}"
+
+      - name: Convert dataset
+        run: uv run anvil convert-dataset --dataset "${{ env.TASKS_PATH }}"
+
+      - name: Restore Xcode build cache
+        id: xcode-cache
+        uses: actions/cache@v4
+        with:
+          path: .xcode-cache/${{ inputs.dataset }}
+          key: xcode-cache-${{ inputs.dataset }}-${{ hashFiles(format('tasks/{0}/**', inputs.dataset)) }}
+          restore-keys: |
+            xcode-cache-${{ inputs.dataset }}-
+
+      - name: Warm Xcode build cache
+        if: steps.xcode-cache.outputs.cache-hit != 'true'
+        run: uv run anvil warm-xcode-cache --dataset "${{ env.DATASET_PATH }}"
+
+      - name: Restore previous results
+        run: |
+          if [ -d "${{ env.RESULTS_PATH }}/runs" ]; then
+            echo "Restoring previous results from gha_runs/"
+            cp -r "${{ env.RESULTS_PATH }}/runs" "${{ env.DATASET_PATH }}/"
+          else
+            echo "No previous results found in gha_runs/"
+          fi
+
+      - name: Run evaluation
+        env:
+          ANVIL_TMPDIR: ${{ github.workspace }}/_anvil_tmp
+        run: |
+          AGENT_ARGS="--agent ${{ inputs.agent }}"
+          if [ "${{ inputs.agent }}" = "oracle" ]; then
+            MODEL_ARGS=""
+          else
+            MODEL_ARGS="--model ${{ inputs.model }}"
+          fi
+
+          uv run anvil run-evals \
+            --dataset "${{ env.DATASET_PATH }}" \
+            $MODEL_ARGS \
+            $AGENT_ARGS \
+            --n-attempts "${{ inputs.n_attempts }}"
+
+      - name: Commit results
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ ! -d "${{ env.DATASET_PATH }}/runs" ]; then
+            echo "No runs directory found, nothing to commit"
+            exit 0
+          fi
+
+          mkdir -p "${{ env.RESULTS_PATH }}"
+          cp -r "${{ env.DATASET_PATH }}/runs" "${{ env.RESULTS_PATH }}/"
+
+          git add "${{ env.RESULTS_PATH }}"
+          if git diff --cached --quiet; then
+            echo "No new results to commit"
+            exit 0
+          fi
+
+          git commit -m "eval: ${{ inputs.dataset }} / ${{ inputs.model || inputs.agent }} (run #${{ github.run_number }})"
+
+          # Retry push with rebase to handle concurrent runs
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin main && break
+            echo "Push attempt $i failed, retrying..."
+            sleep $((i * 5))
+          done

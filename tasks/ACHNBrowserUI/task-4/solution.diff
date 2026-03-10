@@ -1,0 +1,187 @@
+diff --git a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+index b6220ca3..f8e49b71 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
++++ b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+@@ -170,6 +170,7 @@
+ 		69E4BBB6245AE5C9001035E2 /* ItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69E4BBB5245AE5C9001035E2 /* ItemDetailView.swift */; };
+ 		69E4BBB7245AE60C001035E2 /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AF8C7B243E4D29001DD9CB /* Color.swift */; };
+ 		69E4BBB8245AE60F001035E2 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 69AF8C79243E4C78001DD9CB /* Colors.xcassets */; };
++		FA0EC271247B77E400447D7E /* VillagersSortView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0EC270247B77E400447D7E /* VillagersSortView.swift */; };
+ /* End PBXBuildFile section */
+ 
+ /* Begin PBXCopyFilesBuildPhase section */
+@@ -339,6 +340,7 @@
+ 		69E4BBBA245B0BEF001035E2 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+ 		69E98C6E247439AD00A200FE /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
+ 		69EC82ED2461E79D00CE9064 /* TurnipsChartTopLegendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsChartTopLegendView.swift; sourceTree = "<group>"; };
++		FA0EC270247B77E400447D7E /* VillagersSortView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VillagersSortView.swift; sourceTree = "<group>"; };
+ /* End PBXFileReference section */
+ 
+ /* Begin PBXFrameworksBuildPhase section */
+@@ -533,6 +535,7 @@
+ 		697E63F32449A488008FB710 /* villagers */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				FA0EC270247B77E400447D7E /* VillagersSortView.swift */,
+ 				697E63F42449A58E008FB710 /* VillagersListView.swift */,
+ 				697E63F82449DADE008FB710 /* VillagerRowView.swift */,
+ 				697E63FA2449DB0C008FB710 /* VillagerDetailView.swift */,
+@@ -1098,6 +1101,7 @@
+ 				69157BD62471A5A1005B9002 /* UserListSubscribeCallView.swift in Sources */,
+ 				69157BD72471A5A1005B9002 /* TodaySectionEditView.swift in Sources */,
+ 				69157BD82471A5A1005B9002 /* VillagersViewModel.swift in Sources */,
++				FA0EC271247B77E400447D7E /* VillagersSortView.swift in Sources */,
+ 			);
+ 			runOnlyForDeploymentPostprocessing = 0;
+ 		};
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/fr.lproj/Localizable.strings b/ACHNBrowserUI/ACHNBrowserUI/fr.lproj/Localizable.strings
+index 5869b7ab..ac56d908 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/fr.lproj/Localizable.strings
++++ b/ACHNBrowserUI/ACHNBrowserUI/fr.lproj/Localizable.strings
+@@ -294,6 +294,7 @@ You can cancel anytime with your iTunes account settings. Any unused portion of
+ "Catch phrase" = "Slogan";
+ "Unknown" = "Inconnu";
+ "Villager items" = "Objets du villageois";
++"Sort villagers" = "Trier les villageois";
+ 
+ // VillagersDetailView
+ "Unkown" = "Inconnu";
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/viewModels/VillagersViewModel.swift b/ACHNBrowserUI/ACHNBrowserUI/viewModels/VillagersViewModel.swift
+index 70909fb1..a82aeede 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/viewModels/VillagersViewModel.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/viewModels/VillagersViewModel.swift
+@@ -26,7 +26,8 @@ class VillagersViewModel: ObservableObject {
+     @Published var searchResults: [Villager] = []
+     @Published var searchText = ""
+     @Published var todayBirthdays: [Villager] = []
+-    
++    @Published var sortedVillagers: [Villager] = []
++
+     private var apiPublisher: AnyPublisher<[String: Villager], Never>?
+     private var searchCancellable: AnyCancellable?
+     private var apiCancellable: AnyCancellable? {
+@@ -64,5 +65,28 @@ class VillagersViewModel: ObservableObject {
+             $0.localizedName.lowercased().contains(string.lowercased()) == true
+         }
+     }
++    
++    // MARK: - Sort
++    
++    enum Sort: String, CaseIterable {
++        case name, species
++    }
++        
++    var sort: Sort? {
++        didSet {
++            guard let sort = sort else {
++                sortedVillagers = []
++                return
++            }
++            switch sort {
++            case .name:
++                let order: ComparisonResult = sort == oldValue ? .orderedDescending : .orderedAscending
++                sortedVillagers = villagers.sorted{ $0.localizedName.localizedCompare($1.localizedName) == order }
++            case .species:
++                let order: ComparisonResult = sort == oldValue ? .orderedDescending : .orderedAscending
++                sortedVillagers = villagers.sorted{ $0.species.localizedCompare($1.species) == order }
++            }
++        }
++    }
+ }
+ 
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagersListView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagersListView.swift
+index 19802952..43249fdf 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagersListView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagersListView.swift
+@@ -17,6 +17,8 @@ struct VillagersListView: View {
+         get {
+             if !viewModel.searchText.isEmpty {
+                 return viewModel.searchResults
++            } else if viewModel.sort != nil {
++                return viewModel.sortedVillagers
+             } else {
+                 return viewModel.villagers
+             }
+@@ -37,8 +39,13 @@ struct VillagersListView: View {
+                 }
+             }
+             .listStyle(GroupedListStyle())
++            .id(viewModel.sort)
+             .navigationBarTitle(Text("Villagers"),
+                                 displayMode: .automatic)
++                .navigationBarItems(trailing:
++                    HStack(spacing: 12) {
++                        VillagersSortView(sort: $viewModel.sort)
++                })
+             .modifier(DismissingKeyboardOnSwipe())
+             if !viewModel.villagers.isEmpty {
+                 VillagerDetailView(villager: viewModel.villagers.first!)
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagersSortView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagersSortView.swift
+new file mode 100644
+index 00000000..b298c8ca
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagersSortView.swift
+@@ -0,0 +1,63 @@
++//
++//  VillagersSortView.swift
++//  ACHNBrowserUI
++//
++//  Created by Ricardo Hochman on 25/05/20.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++
++struct VillagersSortView: View {
++    
++    @State private var showSortSheet = false
++    @Binding var sort: VillagersViewModel.Sort?
++    
++    enum Sort: String, CaseIterable {
++        case name, species
++    }
++
++    private var sortButton: some View {
++        Button(action: {
++            self.showSortSheet.toggle()
++        }) {
++            Image(systemName: sort == nil ? "arrow.up.arrow.down.circle" : "arrow.up.arrow.down.circle.fill")
++                .imageScale(.large)
++        }
++        .safeHoverEffectBarItem(position: .trailing)
++    }
++
++    private var sortSheet: ActionSheet {
++        var buttons: [ActionSheet.Button] = []
++        for sort in VillagersViewModel.Sort.allCases {
++            buttons.append(.default(Text(LocalizedStringKey(sort.rawValue.localizedCapitalized)),
++                                    action: {
++                                        self.sort = sort
++            }))
++        }
++        
++        if sort != nil {
++            buttons.append(.default(Text("Clear Selection"), action: {
++                self.sort = nil
++            }))
++        }
++        
++        buttons.append(.cancel())
++        
++        let title = Text("Sort villagers")
++        
++        if let currentSort = sort {
++            let currentSortName = NSLocalizedString(currentSort.rawValue.localizedCapitalized, comment: "")
++            return ActionSheet(title: title,
++                               message: Text("Current Sort: \(currentSortName)"),
++                               buttons: buttons)
++        }
++        
++        return ActionSheet(title: title, buttons: buttons)
++    }
++    
++    var body: some View {
++        sortButton
++            .actionSheet(isPresented: $showSortSheet, content: { self.sortSheet })
++    }
++}

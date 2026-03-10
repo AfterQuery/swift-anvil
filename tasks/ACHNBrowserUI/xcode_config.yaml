@@ -1,0 +1,33 @@
+# Xcode build configuration for ACHNBrowserUI
+# Used by: anvil warm-xcode-cache --dataset datasets/ACHNBrowserUI
+#           anvil run-evals --eval-backend xcode --dataset datasets/ACHNBrowserUI
+
+project: ACHNBrowserUI/ACHNBrowserUI.xcodeproj
+scheme: ACHNBrowserUI
+
+# generic/platform for compile-only (no simulator needed)
+destination: "generic/platform=iOS Simulator"
+
+# Per-task unit tests.
+# Each task can have a single tests.swift file at tasks/ACHNBrowserUI/task-N/tests.swift.
+# The eval harness copies it into test_files_dest before running xcodebuild test.
+# The package moved between commits; list both candidates (first match wins).
+test_package_path:
+  - ACHNBrowserUI/Packages/Backend
+  - ACHNBrowserUI/ACHNBrowserUI/packages/Backend
+test_files_dest: Tests/BackendTests
+test_scheme: Backend
+test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
+
+# App-level unit tests (for tasks that modify app-layer code).
+# Tests using `@testable import AC_Helper` are automatically routed here.
+# The harness programmatically injects the test target into project.pbxproj.
+# Note: The app's Swift module name is AC_Helper (from PRODUCT_NAME = "AC Helper").
+app_test_scheme: ACHNBrowserUI
+app_test_target: ACHNBrowserUITests
+app_test_files_dest: ACHNBrowserUI/ACHNBrowserUITests
+app_test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
+app_test_module: AC_Helper
+
+# This project has many SPM dependencies and takes longer than the default to build clean.
+build_timeout: 1800

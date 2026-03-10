@@ -1,0 +1,458 @@
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/services/TurnipExchangeService.swift b/ACHNBrowserUI/ACHNBrowserUI/services/TurnipExchangeService.swift
+--- a/ACHNBrowserUI/ACHNBrowserUI/services/TurnipExchangeService.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/services/TurnipExchangeService.swift
+@@ -25,7 +25,7 @@
+                 if let text = html as? String, let data = text.data(using: .utf8) {
+                     self?.callback?(try? JSONDecoder().decode(IslandContainer.self, from: data))
+                 } else {
+-                    self?.callback(nil)
++                    self?.callback?(nil)
+                 }
+             }
+         }
+diff --git a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+index 2a768a66..7b4611cd 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
++++ b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+@@ -9,6 +9,8 @@
+ /* Begin PBXBuildFile section */
+ 		687B57602449EEB100C1E86F /* Island.swift in Sources */ = {isa = PBXBuildFile; fileRef = 687B575F2449EEB100C1E86F /* Island.swift */; };
+ 		687B57622449EF8C00C1E86F /* TurnipExchangeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 687B57612449EF8C00C1E86F /* TurnipExchangeService.swift */; };
++		687B5768244A030700C1E86F /* TurnipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 687B5767244A030700C1E86F /* TurnipsView.swift */; };
++		68BA5826244A511700B53811 /* CategoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68BA5825244A511700B53811 /* CategoryDetailView.swift */; };
+ 		68DFFFA9244927A400DEA07F /* NookazonService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68DFFFA8244927A400DEA07F /* NookazonService.swift */; };
+ 		68DFFFAB244927CA00DEA07F /* Listing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68DFFFAA244927CA00DEA07F /* Listing.swift */; };
+ 		68DFFFAD24492D7F00DEA07F /* ItemDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68DFFFAC24492D7F00DEA07F /* ItemDetailViewModel.swift */; };
+@@ -78,6 +80,8 @@
+ /* Begin PBXFileReference section */
+ 		687B575F2449EEB100C1E86F /* Island.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Island.swift; sourceTree = "<group>"; };
+ 		687B57612449EF8C00C1E86F /* TurnipExchangeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipExchangeService.swift; sourceTree = "<group>"; };
++		687B5767244A030700C1E86F /* TurnipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsView.swift; sourceTree = "<group>"; };
++		68BA5825244A511700B53811 /* CategoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDetailView.swift; sourceTree = "<group>"; };
+ 		68DFFFA8244927A400DEA07F /* NookazonService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NookazonService.swift; sourceTree = "<group>"; };
+ 		68DFFFAA244927CA00DEA07F /* Listing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listing.swift; sourceTree = "<group>"; };
+ 		68DFFFAC24492D7F00DEA07F /* ItemDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemDetailViewModel.swift; sourceTree = "<group>"; };
+@@ -158,6 +162,14 @@
+ /* End PBXFrameworksBuildPhase section */
+ 
+ /* Begin PBXGroup section */
++		687B5765244A02E400C1E86F /* turnips */ = {
++			isa = PBXGroup;
++			children = (
++				687B5767244A030700C1E86F /* TurnipsView.swift */,
++			);
++			path = turnips;
++			sourceTree = "<group>";
++		};
+ 		692C2BFD2444445E00E5B818 /* json */ = {
+ 			isa = PBXGroup;
+ 			children = (
+@@ -268,6 +280,7 @@
+ 		69AF8C64243E2857001DD9CB /* views */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				687B5765244A02E400C1E86F /* turnips */,
+ 				697E63F32449A488008FB710 /* villagers */,
+ 				6942FC38244989470062FE8F /* listing */,
+ 				6942FC35244988E90062FE8F /* representable */,
+@@ -365,6 +378,7 @@
+ 			isa = PBXGroup;
+ 			children = (
+ 				69C5F5E9244217FB00BF8FA4 /* CategoriesView.swift */,
++				68BA5825244A511700B53811 /* CategoryDetailView.swift */,
+ 			);
+ 			path = categories;
+ 			sourceTree = "<group>";
+@@ -475,6 +489,7 @@
+ 				687B57602449EEB100C1E86F /* Island.swift in Sources */,
+ 				697E63F52449A58E008FB710 /* VillagersListView.swift in Sources */,
+ 				687B57622449EF8C00C1E86F /* TurnipExchangeService.swift in Sources */,
++				68BA5826244A511700B53811 /* CategoryDetailView.swift in Sources */,
+ 				68DFFFAB244927CA00DEA07F /* Listing.swift in Sources */,
+ 				69C5F5E72442119500BF8FA4 /* Material.swift in Sources */,
+ 				69AF8C80243E5EBD001DD9CB /* Categories.swift in Sources */,
+@@ -490,6 +505,7 @@
+ 				697E63FB2449DB0C008FB710 /* VillagerDetailView.swift in Sources */,
+ 				69C5F5EA244217FB00BF8FA4 /* CategoriesView.swift in Sources */,
+ 				69AF8C68243E286C001DD9CB /* NookPlazaAPIService.swift in Sources */,
++				687B5768244A030700C1E86F /* TurnipsView.swift in Sources */,
+ 				69BEA989243E68D400F02C61 /* CollectionViewModel.swift in Sources */,
+ 				6942FC37244988F80062FE8F /* SafariView.swift in Sources */,
+ 				69AF8C7C243E4D29001DD9CB /* Color.swift in Sources */,
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/.DS_Store b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/.DS_Store
+index 551870ff..1ec416f1 100644
+Binary files a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/.DS_Store and b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/.DS_Store differ
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-turnip.imageset/Contents.json b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-turnip.imageset/Contents.json
+new file mode 100644
+index 00000000..92d9c610
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-turnip.imageset/Contents.json
+@@ -0,0 +1,21 @@
++{
++  "images" : [
++    {
++      "idiom" : "universal",
++      "scale" : "1x"
++    },
++    {
++      "filename" : "Kabu.png",
++      "idiom" : "universal",
++      "scale" : "2x"
++    },
++    {
++      "idiom" : "universal",
++      "scale" : "3x"
++    }
++  ],
++  "info" : {
++    "author" : "xcode",
++    "version" : 1
++  }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-turnip.imageset/Kabu.png b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-turnip.imageset/Kabu.png
+new file mode 100644
+index 00000000..3ad37d97
+Binary files /dev/null and b/ACHNBrowserUI/ACHNBrowserUI/Assets.xcassets/icon/icon-turnip.imageset/Kabu.png differ
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/models/Island.swift b/ACHNBrowserUI/ACHNBrowserUI/models/Island.swift
+index d360ecf4..b5cbfc0a 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/models/Island.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/models/Island.swift
+@@ -38,6 +38,12 @@ struct Island: Decodable {
+     let commerce: Commerce
+     let islandTime: String
+     let creationTime: String
+-    let islandDescription: String
++    let islandDescription: String?
+     let queued: String
+ }
++
++extension Island: Identifiable {
++    var id: String {
++        turnipCode
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/viewModels/ItemsViewModel.swift b/ACHNBrowserUI/ACHNBrowserUI/viewModels/ItemsViewModel.swift
+index e4ed4b28..49bc3fc6 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/viewModels/ItemsViewModel.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/viewModels/ItemsViewModel.swift
+@@ -58,7 +58,7 @@ class ItemsViewModel: ObservableObject {
+         }
+     }
+     
+-    init(categorie: Categories) {
++    public init(categorie: Categories) {
+         self.categorie = categorie
+         searchCancellable = _searchText
+             .projectedValue
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoriesView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoriesView.swift
+index b6fc448f..9ec1356d 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoriesView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoriesView.swift
+@@ -10,35 +10,66 @@ import SwiftUI
+ 
+ struct CategoriesView: View {
+     let categories: [Categories]
+-    @Binding var selectedCategory: Categories
+     @Environment(\.presentationMode) private var presentationMode
+     
++    func makeWardrobeCell() -> some View {
++        NavigationLink(destination: CategoryDetailView(categories: Categories.wardrobe()).navigationBarTitle("Wardrobe")) {
++            HStack {
++                Image(Categories.dresses.iconName())
++                    .renderingMode(.original)
++                    .resizable()
++                    .frame(width: 46, height: 46)
++                Text("Wardrobe")
++                    .font(.headline)
++                    .foregroundColor(.text)
++            }
++        }
++    }
++    
++    func makeNatureCell() -> some View {
++        NavigationLink(destination: CategoryDetailView(categories: Categories.nature()).navigationBarTitle("Nature")) {
++            HStack {
++                Image(Categories.fossils.iconName())
++                    .renderingMode(.original)
++                    .resizable()
++                    .frame(width: 46, height: 46)
++                Text("Nature")
++                    .font(.headline)
++                    .foregroundColor(.text)
++            }
++        }
++    }
++    
++    func makeCategories() -> some View {
++        ForEach(categories, id: \.self) { categorie in
++            NavigationLink(destination: ItemsListView(viewModel: ItemsViewModel(categorie: categorie))) {
++                HStack {
++                    Image(categorie.iconName())
++                        .renderingMode(.original)
++                        .resizable()
++                        .frame(width: 46, height: 46)
++                    Text(categorie.rawValue.capitalized)
++                        .font(.headline)
++                        .foregroundColor(.text)
++                }
++            }
++        }
++    }
++    
+     var body: some View {
+         NavigationView {
+-            List(categories, id: \.self) { categorie in
+-                Button(action: {
+-                    self.selectedCategory = categorie
+-                    self.presentationMode.wrappedValue.dismiss()
+-                }) {
+-                    HStack(spacing: 4) {
+-                        if categorie == self.selectedCategory {
+-                            Image(systemName: "checkmark").foregroundColor(.bell)
+-                        }
+-                        Image(categorie.iconName())
+-                            .renderingMode(.original)
+-                            .resizable()
+-                            .frame(width: 25, height: 25)
+-                        Text(categorie.rawValue.capitalized).foregroundColor(.text)
+-                    }
+-                }
+-                }.navigationBarTitle(Text("Categories"), displayMode: .inline)
++            List {
++                makeNatureCell()
++                makeWardrobeCell()
++                makeCategories()
++            }
++            .navigationBarTitle(Text("Catalog"), displayMode: .inline)
+         }.navigationViewStyle(StackNavigationViewStyle())
+     }
+ }
+ 
+ struct CategoriesView_Previews: PreviewProvider {
+     static var previews: some View {
+-        CategoriesView(categories: Categories.items(),
+-                       selectedCategory: .constant(.housewares))
++        CategoriesView(categories: Categories.items())
+     }
+ }
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoryDetailView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoryDetailView.swift
+new file mode 100644
+index 00000000..5a7a5ba9
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/categories/CategoryDetailView.swift
+@@ -0,0 +1,32 @@
++//
++//  CategoryDetailView.swift
++//  ACHNBrowserUI
++//
++//  Created by Eric Lewis on 4/17/20.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++
++struct CategoryDetailView: View {
++    let categories: [Categories]
++    
++    var body: some View {
++        List {
++            ForEach(categories, id: \.rawValue) { category in
++                NavigationLink(destination: ItemsListView(viewModel: ItemsViewModel(categorie: category))) {
++                    HStack {
++                        Image(category.iconName())
++                            .renderingMode(.original)
++                            .resizable()
++                            .frame(width: 46, height: 46)
++                        Text(category.rawValue.localizedCapitalized)
++                            .font(.headline)
++                            .foregroundColor(.text)
++                    }
++                }
++            }
++            
++        }
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/home/TabbarView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/home/TabbarView.swift
+index 977f5cd8..a46cffd4 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/home/TabbarView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/home/TabbarView.swift
+@@ -10,7 +10,7 @@ import SwiftUI
+ 
+ struct TabbarView: View {
+     enum Tab: Int {
+-        case items, wardrobe, nature, villagers, collection
++        case items, wardrobe, nature, villagers, collection, turnips
+     }
+     
+     @State var selectedTab = Tab.items
+@@ -25,15 +25,18 @@ struct TabbarView: View {
+     var body: some View {
+         TabView(selection: $selectedTab) {
+             Group {
+-                ItemsListView(categories: Categories.items()).tabItem{
+-                    self.tabbarItem(text: "Items", image: "icon-leaf")
++                CategoriesView(categories: Categories.items()).tabItem{
++                    self.tabbarItem(text: "Catalog", image: "icon-leaf")
+                 }.tag(Tab.items)
+-                ItemsListView(categories: Categories.wardrobe()).tabItem{
+-                    self.tabbarItem(text: "Wardrobe", image: "icon-top")
+-                }.tag(Tab.wardrobe)
+-                ItemsListView(categories: Categories.nature()).tabItem{
+-                    self.tabbarItem(text: "Nature", image: "icon-fossil")
+-                }.tag(Tab.nature)
++//                ItemsListView(categories: Categories.wardrobe()).tabItem{
++//                    self.tabbarItem(text: "Wardrobe", image: "icon-top")
++//                }.tag(Tab.wardrobe)
++//                ItemsListView(categories: Categories.nature()).tabItem{
++//                    self.tabbarItem(text: "Nature", image: "icon-fossil")
++//                }.tag(Tab.nature)
++                TurnipsView().tabItem {
++                    tabbarItem(text: "Turnips", image: "icon-turnip")
++                }.tag(Tab.turnips)
+                 VillagersListView().tabItem{
+                     self.tabbarItem(text: "Villagers", image: "icon-villager")
+                 }.tag(Tab.villagers)
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemsListView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemsListView.swift
+index 1c9899d8..f76aa058 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemsListView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemsListView.swift
+@@ -9,8 +9,7 @@
+ import SwiftUI
+ 
+ struct ItemsListView: View {
+-    @ObservedObject private var viewModel = ItemsViewModel(categorie: .housewares)
+-    @State private var showFilterSheet = false
++    @ObservedObject var viewModel: ItemsViewModel
+     @State private var showSortSheet = false
+     
+     var currentItems: [Item] {
+@@ -25,17 +24,6 @@ struct ItemsListView: View {
+         }
+     }
+     
+-    let categories: [Categories]
+-    
+-    private var filterButton: some View {
+-        Button(action: {
+-            self.showFilterSheet.toggle()
+-        }) {
+-            Image(systemName: "line.horizontal.3.decrease.circle")
+-                .font(.title)
+-        }
+-    }
+-    
+     private var sortButton: some View {
+         Button(action: {
+             self.showSortSheet.toggle()
+@@ -82,38 +70,24 @@ struct ItemsListView: View {
+     }
+     
+     var body: some View {
+-        NavigationView {
+-            List {
+-                SearchField(searchText: $viewModel.searchText)
+-                    .listRowBackground(Color.grass)
+-                    .foregroundColor(.white)
+-                ForEach(currentItems) { item in
+-                    NavigationLink(destination: ItemDetailView(itemsViewModel: self.viewModel,
+-                                                               itemViewModel: ItemDetailViewModel(item: item))) {
+-                        ItemRowView(item: item)
+-                            .environmentObject(ItemDetailViewModel(item: item))
+-                            .listRowBackground(Color.dialogue)
+-                    }
++        List {
++            SearchField(searchText: $viewModel.searchText)
++                .listRowBackground(Color.grass)
++                .foregroundColor(.white)
++            ForEach(currentItems) { item in
++                NavigationLink(destination: ItemDetailView(itemsViewModel: self.viewModel,
++                                                           itemViewModel: ItemDetailViewModel(item: item))) {
++                    ItemRowView(item: item)
++                        .environmentObject(ItemDetailViewModel(item: item))
++                        .listRowBackground(Color.dialogue)
+                 }
+             }
+-            .id(viewModel.sort)
+-            .background(Color.dialogue)
+-            .navigationBarItems(leading: sortButton, trailing: filterButton)
+-            .navigationBarTitle(Text(viewModel.categorie.rawValue.capitalized),
+-                                displayMode: .inline)
+-            .sheet(isPresented: $showFilterSheet, content: { CategoriesView(categories: self.categories,
+-                                                                            selectedCategory: self.$viewModel.categorie) })
+-            .actionSheet(isPresented: $showSortSheet, content: { self.sortSheet })
+-            placeholderView
+-        }.onAppear {
+-            self.viewModel.categorie = self.categories.first!
+         }
+-    }
+-}
+-
+-struct ItemsListViewPreviews: PreviewProvider {
+-    static var previews: some View {
+-        ItemsListView(categories: Categories.items())
+-            .environmentObject(CollectionViewModel())
++        .id(viewModel.sort)
++        .background(Color.dialogue)
++        .navigationBarTitle(Text(viewModel.categorie.rawValue.capitalized),
++                            displayMode: .inline)
++        .actionSheet(isPresented: $showSortSheet, content: { self.sortSheet })
++        .onAppear(perform: viewModel.fetch)
+     }
+ }
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
+new file mode 100644
+index 00000000..99b93b89
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
+@@ -0,0 +1,50 @@
++//
++//  TurnipView.swift
++//  ACHNBrowserUI
++//
++//  Created by Eric Lewis on 4/17/20.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++import Combine
++
++class TurnipsViewModel: ObservableObject {
++    @Published var islands: [Island]?
++    
++    var cancellable: AnyCancellable?
++    
++    func fetch() {
++        cancellable = TurnipExchangeService
++            .fetchIslands()
++            .receive(on: RunLoop.main)
++            .sink(receiveCompletion: { _ in
++                
++            }) { [weak self] islands in
++                self?.islands = islands
++            }
++    }
++}
++
++struct TurnipsView: View {
++    @ObservedObject var viewModel = TurnipsViewModel()
++    
++    var body: some View {
++        List {
++            Section(header: Text("Chart")) {
++                Text("Chart here")
++            }
++            Section(header: Text("Open Islands")) {
++                if viewModel.islands == nil {
++                    Text("Loading Islands...")
++                }
++                viewModel.islands.map {
++                    ForEach($0) {
++                        Text($0.name)
++                    }
++                }
++            }
++        }
++        .onAppear(perform: viewModel.fetch)
++    }
++}

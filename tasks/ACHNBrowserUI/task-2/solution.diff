@@ -1,0 +1,571 @@
+diff --git a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+index 9d11d506..fc172696 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
++++ b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+@@ -7,9 +7,8 @@
+ 	objects = {
+ 
+ /* Begin PBXBuildFile section */
++		4C16FB41247AC9B0009F24E3 /* GridStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C16FB40247AC9B0009F24E3 /* GridStack.swift */; };
+ 		157C03E7247AE56600568917 /* TodaySectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 157C03E6247AE56600568917 /* TodaySectionView.swift */; };
+-		4CEEFBD92477D9E900663590 /* TurnipsMinMaxPriceRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CEEFBD82477D9E900663590 /* TurnipsMinMaxPriceRow.swift */; };
+-		4CEEFBDB2477E58500663590 /* TurnipsPriceRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CEEFBDA2477E58500663590 /* TurnipsPriceRow.swift */; };
+ 		690A72C924752BF4001E7294 /* villagersLikes in Resources */ = {isa = PBXBuildFile; fileRef = 690A72C824752BF4001E7294 /* villagersLikes */; };
+ 		69157B7E2471A5A1005B9002 /* TodayMysteryIslandsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69157B6D247121ED005B9002 /* TodayMysteryIslandsSection.swift */; };
+ 		69157B7F2471A5A1005B9002 /* TodayNookazonSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 693E2BC3246689C500B85CB8 /* TodayNookazonSection.swift */; };
+@@ -96,7 +95,6 @@
+ 		69157BD02471A5A1005B9002 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69E4BBBA245B0BEF001035E2 /* AboutView.swift */; };
+ 		69157BD12471A5A1005B9002 /* TurnipsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68BA5829244B693300B53811 /* TurnipsViewModel.swift */; };
+ 		69157BD22471A5A1005B9002 /* TodayWhatsNewSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 693E2BC524668D8E00B85CB8 /* TodayWhatsNewSection.swift */; };
+-		69157BD32471A5A1005B9002 /* TurnipsAveragePriceRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69518369245977D1005D28E0 /* TurnipsAveragePriceRow.swift */; };
+ 		69157BD42471A5A1005B9002 /* EventsDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69CA5F17244F447E00B275B6 /* EventsDescription.swift */; };
+ 		69157BD52471A5A1005B9002 /* ItemDetailInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B13CA7245599A00089BD7B /* ItemDetailInfoView.swift */; };
+ 		69157BD62471A5A1005B9002 /* UserListSubscribeCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 693E2BCB2466DE9A00B85CB8 /* UserListSubscribeCallView.swift */; };
+@@ -204,6 +202,7 @@
+ 		3DB1260324686F0B00E74AA5 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+ 		3DF14B2C24664B2600438646 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+ 		3DF14B2E24664B4A00438646 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
++		4C16FB40247AC9B0009F24E3 /* GridStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridStack.swift; sourceTree = "<group>"; };
+ 		4C2D676A245DA41E005831C4 /* TurnipsChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsChartView.swift; sourceTree = "<group>"; };
+ 		4C2D676D245F0666005831C4 /* TurnipsChartBottomLegendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsChartBottomLegendView.swift; sourceTree = "<group>"; };
+ 		4C2D676F245F0698005831C4 /* TurnipsChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsChart.swift; sourceTree = "<group>"; };
+@@ -215,8 +214,6 @@
+ 		4C7F2F772461F10300930928 /* TurnipsChartVerticalLegend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsChartVerticalLegend.swift; sourceTree = "<group>"; };
+ 		4C7FE78224574FB50011E8AB /* ActivityIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityIndicator.swift; sourceTree = "<group>"; };
+ 		4C7FE788245B57A10011E8AB /* AdaptsToSoftwareKeyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptsToSoftwareKeyboard.swift; sourceTree = "<group>"; };
+-		4CEEFBD82477D9E900663590 /* TurnipsMinMaxPriceRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsMinMaxPriceRow.swift; sourceTree = "<group>"; };
+-		4CEEFBDA2477E58500663590 /* TurnipsPriceRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsPriceRow.swift; sourceTree = "<group>"; };
+ 		4CF14B74246B3E9E00F740BF /* TurnipsChartValuesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsChartValuesView.swift; sourceTree = "<group>"; };
+ 		4CF8049A24635E54005C6C63 /* Path.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Path.swift; sourceTree = "<group>"; };
+ 		4F92A4522470AC01003A2911 /* CollectionRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionRowView.swift; sourceTree = "<group>"; };
+@@ -258,7 +255,6 @@
+ 		693E72A6245EBB1200CD26F4 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
+ 		6941F3872452BDDD00EC2E02 /* CategoriesSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoriesSearchViewModel.swift; sourceTree = "<group>"; };
+ 		6942FC39244989530062FE8F /* ListingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingRow.swift; sourceTree = "<group>"; };
+-		69518369245977D1005D28E0 /* TurnipsAveragePriceRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnipsAveragePriceRow.swift; sourceTree = "<group>"; };
+ 		6951837424599C26005D28E0 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+ 		695D45F82467025000B5C313 /* villagersHouse */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = villagersHouse; sourceTree = "<group>"; };
+ 		695D45FA24671B1800B5C313 /* VillagerDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VillagerDetailViewModel.swift; sourceTree = "<group>"; };
+@@ -425,7 +421,6 @@
+ 			isa = PBXGroup;
+ 			children = (
+ 				4C2D676C245F063E005831C4 /* charts */,
+-				6951836C245977ED005D28E0 /* rows */,
+ 				6951836B245977E5005D28E0 /* islands */,
+ 				69B13CAC24577A090089BD7B /* TurnipIslandRow.swift */,
+ 				687B5767244A030700C1E86F /* TurnipsView.swift */,
+@@ -515,16 +510,6 @@
+ 			path = islands;
+ 			sourceTree = "<group>";
+ 		};
+-		6951836C245977ED005D28E0 /* rows */ = {
+-			isa = PBXGroup;
+-			children = (
+-				69518369245977D1005D28E0 /* TurnipsAveragePriceRow.swift */,
+-				4CEEFBD82477D9E900663590 /* TurnipsMinMaxPriceRow.swift */,
+-				4CEEFBDA2477E58500663590 /* TurnipsPriceRow.swift */,
+-			);
+-			path = rows;
+-			sourceTree = "<group>";
+-		};
+ 		6951837324599C26005D28E0 /* Frameworks */ = {
+ 			isa = PBXGroup;
+ 			children = (
+@@ -711,6 +696,7 @@
+ 				4C7FE78224574FB50011E8AB /* ActivityIndicator.swift */,
+ 				69875F4F24652A4700B1D46C /* Sheet.swift */,
+ 				693E2BBD2465B65D00B85CB8 /* RowLoadingView.swift */,
++				4C16FB40247AC9B0009F24E3 /* GridStack.swift */,
+ 			);
+ 			path = shared;
+ 			sourceTree = "<group>";
+@@ -1015,7 +1001,6 @@
+ 				157C03E7247AE56600568917 /* TodaySectionView.swift in Sources */,
+ 				69157B822471A5A1005B9002 /* ItemDetailViewModel.swift in Sources */,
+ 				69157B832471A5A1005B9002 /* TurnipsChartMinBuyPriceCurve.swift in Sources */,
+-				4CEEFBD92477D9E900663590 /* TurnipsMinMaxPriceRow.swift in Sources */,
+ 				69157B842471A5A1005B9002 /* ItemRowView.swift in Sources */,
+ 				69157B852471A5A1005B9002 /* VillagersListView.swift in Sources */,
+ 				69157B862471A5A1005B9002 /* MysteryIslandRow.swift in Sources */,
+@@ -1045,6 +1030,7 @@
+ 				69157B9C2471A5A1005B9002 /* Path.swift in Sources */,
+ 				69157B9D2471A5A1005B9002 /* UIState.swift in Sources */,
+ 				69157B9E2471A5A1005B9002 /* TodayTasksSection.swift in Sources */,
++				4C16FB41247AC9B0009F24E3 /* GridStack.swift in Sources */,
+ 				69157B9F2471A5A1005B9002 /* SafariView.swift in Sources */,
+ 				69157BA02471A5A1005B9002 /* DismissingKeyboardOnSwipe.swift in Sources */,
+ 				69157BA12471A5A1005B9002 /* ItemDetailSeasonSectionView.swift in Sources */,
+@@ -1089,7 +1075,6 @@
+ 				69157BC82471A5A1005B9002 /* TurnipsChartMinMaxCurves.swift in Sources */,
+ 				69157BC92471A5A1005B9002 /* TurnipsChartGrid.swift in Sources */,
+ 				69157BCA2471A5A1005B9002 /* CollectionRowView.swift in Sources */,
+-				4CEEFBDB2477E58500663590 /* TurnipsPriceRow.swift in Sources */,
+ 				693352842473C4B5007EF9AB /* TodaySpecialCharactersSection.swift in Sources */,
+ 				69157BCB2471A5A1005B9002 /* SearchField.swift in Sources */,
+ 				69157BCC2471A5A1005B9002 /* CollectionProgressDetailView.swift in Sources */,
+@@ -1099,7 +1084,6 @@
+ 				69157BD02471A5A1005B9002 /* AboutView.swift in Sources */,
+ 				69157BD12471A5A1005B9002 /* TurnipsViewModel.swift in Sources */,
+ 				69157BD22471A5A1005B9002 /* TodayWhatsNewSection.swift in Sources */,
+-				69157BD32471A5A1005B9002 /* TurnipsAveragePriceRow.swift in Sources */,
+ 				69157BD42471A5A1005B9002 /* EventsDescription.swift in Sources */,
+ 				69157BD52471A5A1005B9002 /* ItemDetailInfoView.swift in Sources */,
+ 				69157BD62471A5A1005B9002 /* UserListSubscribeCallView.swift in Sources */,
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/extensions/View.swift b/ACHNBrowserUI/ACHNBrowserUI/extensions/View.swift
+index ef9ec861..df015786 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/extensions/View.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/extensions/View.swift
+@@ -79,7 +79,6 @@ extension View {
+     }
+ 
+     func eraseToAnyView() -> AnyView { AnyView(self) }
+-    func eraseToAnyViewForRow() -> VStack<AnyView> { VStack { eraseToAnyView() } }
+ }
+ 
+ extension View {
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/shared/GridStack.swift b/ACHNBrowserUI/ACHNBrowserUI/views/shared/GridStack.swift
+new file mode 100644
+index 00000000..5bd3851c
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/shared/GridStack.swift
+@@ -0,0 +1,53 @@
++//
++//  GridStack.swift
++//  ACHNBrowserUI
++//
++//  Created by Renaud JENNY on 24/05/2020.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++
++// See https://www.hackingwithswift.com/quick-start/swiftui/how-to-position-views-in-a-grid
++struct GridStack<Content: View>: View {
++    let rows: Int
++    let columns: Int
++    let spacing: CGFloat?
++    let content: (Int, Int) -> Content
++
++    var body: some View {
++        VStack(alignment: .leading, spacing: spacing) {
++            ForEach(0..<rows, id: \.self) { row in
++                VStack {
++                    if row == 0 { Spacer() }
++                    HStack {
++                        ForEach(0..<self.columns, id: \.self) { column in
++                            HStack {
++                                column > 0 ? Spacer().eraseToAnyView() : EmptyView().eraseToAnyView()
++                                self.content(row, column)
++                                Spacer()
++                            }
++                        }
++                    }
++                    if row == self.rows - 1 {
++                        Spacer()
++                    } else {
++                        Divider()
++                    }
++                }
++            }
++        }
++    }
++
++    init(
++        rows: Int,
++        columns: Int,
++        spacing: CGFloat? = nil,
++        @ViewBuilder content: @escaping (Int, Int) -> Content
++    ) {
++        self.rows = rows
++        self.columns = columns
++        self.content = content
++        self.spacing = spacing
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
+index 6fbd2c81..d5485b37 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
+@@ -156,22 +156,23 @@ extension TurnipsView {
+                         Text("Profits estimates are computed using the average of the current period")
+                             .foregroundColor(.acSecondaryText)
+                     }
+-                    HStack {
+-                        Text("Day").fontWeight(.bold)
+-                        Spacer()
+-                        Text("AM").fontWeight(.bold)
+-                        Spacer()
+-                        Text("PM").fontWeight(.bold)
++                    GridStack<AnyView>(rows: 1, columns: 3) { _, column in
++                        switch column {
++                        case 0: return Text("Day").fontWeight(.bold).eraseToAnyView()
++                        case 1: return Text("AM").fontWeight(.bold).eraseToAnyView()
++                        case 2: return Text("PM").fontWeight(.bold).eraseToAnyView()
++                        default: return EmptyView().eraseToAnyView()
++                        }
+                     }
+                 }
+                 if turnipsDisplay == .average {
+-                    ForEach(uniqueLabels(for: "average"), id: \.1, content: averagePriceRow(day:identifier:))
++                    GridStack(rows: labels.count, columns: 3, spacing: 16, content: averageGridValues)
+                 }
+                 else if turnipsDisplay == .minMax {
+-                    ForEach(uniqueLabels(for: "min max"), id: \.1, content: minMaxPriceRow(day:identifier:))
++                    GridStack(rows: labels.count, columns: 3, spacing: 16, content: minMaxGridValues)
+                 } else if turnipsDisplay == .profits {
+                     if viewModel.averagesProfits != nil {
+-                        ForEach(uniqueLabels(for: "profits"), id: \.1, content: averageProfitRow(day:identifier:))
++                        GridStack(rows: labels.count, columns: 3, spacing: 16, content: averageProfitGridValues)
+                     } else {
+                         Text("Please add the amount of turnips you bought and for how much")
+                             .foregroundColor(.acHeaderBackground)
+@@ -243,37 +244,117 @@ extension TurnipsView {
+ }
+ 
+ extension TurnipsView {
+-    private func averagePriceRow(day: String, identifier: String) -> some View {
+-        guard let dayNumber = labels.firstIndex(of: day),
+-            let prices = viewModel.averagesPrices?[dayNumber],
+-            let minMaxPrices = viewModel.minMaxPrices?[dayNumber] else {
+-                return EmptyView().eraseToAnyViewForRow()
++    private enum Meridian { case am, pm }
++
++    private func gridHeader(column: Int) -> some View {
++        switch column {
++        case 0: return Text("Day").fontWeight(.bold)
++        case 1: return Text("AM").fontWeight(.bold)
++        case 2: return Text("PM").fontWeight(.bold)
++        default: return Text("").fontWeight(.bold)
++        }
++    }
++
++    private func weekDaysText(row: Int) -> some View {
++        Text(LocalizedStringKey(labels[row]))
++            .font(.body)
++            .foregroundColor(.acText)
++            .eraseToAnyView()
++    }
++
++    private func averageGridValues(row: Int, column: Int) -> some View {
++        switch column {
++        case 0: return weekDaysText(row: row).eraseToAnyView()
++        case 1: return averagePriceText(dayNumber: row, meridian: .am).eraseToAnyView()
++        case 2: return averagePriceText(dayNumber: row, meridian: .pm).eraseToAnyView()
++        default: return EmptyView().eraseToAnyView()
+         }
+-        return TurnipsAveragePriceRow(label: day, prices: prices, minMaxPrices: minMaxPrices)
+-            .eraseToAnyViewForRow()
+     }
+ 
+-    private func minMaxPriceRow(day: String, identifier: String) -> some View {
+-        guard let dayNumber = labels.firstIndex(of: day),
+-            let prices = viewModel.minMaxPrices?[dayNumber],
+-            let averagePrices = viewModel.averagesPrices?[dayNumber] else {
+-                return EmptyView().eraseToAnyViewForRow()
++    private func minMaxGridValues(row: Int, column: Int) -> some View {
++        switch column {
++        case 0: return weekDaysText(row: row).eraseToAnyView()
++        case 1: return minMaxPriceText(dayNumber: row, meridian: .am).eraseToAnyView()
++        case 2: return minMaxPriceText(dayNumber: row, meridian: .pm).eraseToAnyView()
++        default: return EmptyView().eraseToAnyView()
+         }
+-        return TurnipsMinMaxPriceRow(label: day, prices: prices, averagePrices: averagePrices)
+-            .eraseToAnyViewForRow()
+     }
+ 
+-    private func averageProfitRow(day: String, identifier: String) -> some View {
+-        guard let dayNumber = labels.firstIndex(of: day),
+-            let prices = viewModel.averagesProfits?[dayNumber] else {
+-                return EmptyView().eraseToAnyViewForRow()
++    private func averageProfitGridValues(row: Int, column: Int) -> some View {
++        switch column {
++        case 0: return weekDaysText(row: row).eraseToAnyView()
++        case 1: return averageProfitText(dayNumber: row, meridian: .am).eraseToAnyView()
++        case 2: return averageProfitText(dayNumber: row, meridian: .pm).eraseToAnyView()
++        default: return EmptyView().eraseToAnyView()
+         }
+-        return TurnipsAveragePriceRow(label: day, prices: prices, minMaxPrices: [])
+-            .eraseToAnyViewForRow()
+     }
+ 
+-    private func uniqueLabels(for uniqueIdentifier: String) -> [(String, String)] {
+-        labels.map { ($0, uniqueIdentifier + $0) }
++    private func averagePriceText(dayNumber: Int, meridian: Meridian) -> some View {
++        guard let averagePrices = viewModel.averagesPrices?[dayNumber],
++            let averagePrice = meridian == .am ? averagePrices.first : averagePrices.last,
++            let minMaxPricesForTheDay = viewModel.minMaxPrices?[dayNumber],
++            let minMaxPrices = meridian == .am ? minMaxPricesForTheDay.first : minMaxPricesForTheDay.last else {
++                return EmptyView().eraseToAnyView()
++        }
++
++        return Text("\(averagePrice)")
++            .font(.headline)
++            .fontWeight(.bold)
++            .foregroundColor(color(averagePrice: averagePrice, minMaxPrices: minMaxPrices))
++            .eraseToAnyView()
++    }
++
++    private func minMaxPriceText(dayNumber: Int, meridian: Meridian) -> some View {
++        guard let averagePrices = viewModel.averagesPrices?[dayNumber],
++            let averagePrice = meridian == .am ? averagePrices.first : averagePrices.last,
++            let minMaxPricesForTheDay = viewModel.minMaxPrices?[dayNumber],
++            let minMaxPrices = meridian == .am ? minMaxPricesForTheDay.first : minMaxPricesForTheDay.last else {
++                return EmptyView().eraseToAnyView()
++        }
++
++        let isEntered = averagePrice == minMaxPrices.first && averagePrice == minMaxPrices.last
++        let minMaxText: String
++        if isEntered {
++            minMaxText = "\(minMaxPrices.first ?? 0)"
++        } else {
++            minMaxText = minMaxPrices.map(String.init).joined(separator: " - ")
++        }
++
++        return Text(minMaxText)
++            .font(.headline)
++            .fontWeight(.bold)
++            .foregroundColor(color(averagePrice: averagePrice, minMaxPrices: minMaxPrices))
++            .eraseToAnyView()
++    }
++
++    private func averageProfitText(dayNumber: Int, meridian: Meridian) -> some View {
++        guard let averageProfitsPrices = viewModel.averagesProfits?[dayNumber],
++            let averageProfitsPrice = meridian == .am ? averageProfitsPrices.first : averageProfitsPrices.last else {
++                return EmptyView().eraseToAnyView()
++        }
++
++        return Text("\(averageProfitsPrice)")
++            .font(.headline)
++            .fontWeight(.bold)
++            .foregroundColor(color(averagePrice: averageProfitsPrice, minMaxPrices: []))
++            .eraseToAnyView()
++    }
++
++    private func color(averagePrice: Int, minMaxPrices: [Int]) -> Color {
++        let isEntered = averagePrice == minMaxPrices.first && averagePrice == minMaxPrices.last
++        let price = turnipsDisplay == .minMax ? Int(minMaxPrices.average) : averagePrice
++
++        return isEntered ? .acText : color(price: price)
++    }
++
++    private func color(price: Int) -> Color {
++        if price <= 90 {
++            return .red
++        } else if price >= 150 {
++            return .acTabBarBackground
++        } else {
++            return .acSecondaryText
++        }
+     }
+ }
+ 
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsAveragePriceRow.swift b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsAveragePriceRow.swift
+deleted file mode 100644
+index e6edb8f6..00000000
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsAveragePriceRow.swift
++++ /dev/null
+@@ -1,60 +0,0 @@
+-//
+-//  TurnipsAveragePriceRow.swift
+-//  ACHNBrowserUI
+-//
+-//  Created by Thomas Ricouard on 29/04/2020.
+-//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+-//
+-
+-import SwiftUI
+-
+-struct TurnipsAveragePriceRow: View {
+-    let label: String
+-    let prices: [Int]
+-    let minMaxPrices: [[Int]]
+-
+-    var body: some View {
+-        HStack {
+-            Text(LocalizedStringKey(label))
+-                .font(.body)
+-                .foregroundColor(.acText)
+-            Spacer()
+-            Text("\(prices.first!)")
+-                .font(.headline)
+-                .fontWeight(.bold)
+-                .foregroundColor(color(meridian: .am))
+-            Spacer()
+-            Text("\(prices.last!)")
+-                .font(.headline)
+-                .fontWeight(.bold)
+-                .foregroundColor(color(meridian: .pm))
+-        }
+-    }
+-}
+-
+-extension TurnipsAveragePriceRow: TurnipsPriceRow {
+-    enum Meridian { case am, pm }
+-
+-    var averagePrices: [Int] { prices }
+-
+-    func color(meridian: Meridian) -> Color {
+-        if isEntered(meridian: meridian) {
+-            return .acText
+-        } else if let price = meridian == .am ? prices.first : prices.last {
+-            return color(price: price)
+-        } else {
+-            return .clear
+-        }
+-    }
+-}
+-
+-struct TurnipsAveragePriceRow_Previews: PreviewProvider {
+-    static var previews: some View {
+-        NavigationView {
+-            List {
+-                TurnipsAveragePriceRow(label: "Mon", prices: [90, 95], minMaxPrices: [[90, 90], [81, 141]])
+-                TurnipsAveragePriceRow(label: "Mon", prices: [40, 600], minMaxPrices: [[40, 81], [250, 600]])
+-            }
+-        }
+-    }
+-}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsMinMaxPriceRow.swift b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsMinMaxPriceRow.swift
+deleted file mode 100644
+index 5a311a94..00000000
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsMinMaxPriceRow.swift
++++ /dev/null
+@@ -1,84 +0,0 @@
+-//
+-//  TurnipsMinMaxPriceRow.swift
+-//  ACHNBrowserUI
+-//
+-//  Created by Renaud JENNY on 22/05/2020.
+-//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+-//
+-
+-import SwiftUI
+-
+-struct TurnipsMinMaxPriceRow: View {
+-    let label: String
+-    let prices: [[Int]]
+-    let averagePrices: [Int]
+-
+-    typealias Meridian = TurnipsAveragePriceRow.Meridian
+-
+-    var body: some View {
+-        HStack {
+-            Text(LocalizedStringKey(label))
+-                .font(.body)
+-                .foregroundColor(.acText)
+-            Spacer()
+-            Text(amMinMaxPrices)
+-                .font(.headline)
+-                .fontWeight(.bold)
+-                .foregroundColor(color(meridian: .am))
+-            Spacer()
+-            Text(pmMinMaxPrices)
+-                .font(.headline)
+-                .fontWeight(.bold)
+-                .foregroundColor(color(meridian: .pm))
+-        }
+-    }
+-}
+-
+-extension TurnipsMinMaxPriceRow: TurnipsPriceRow {
+-    var minMaxPrices: [[Int]] { prices }
+-
+-    private func color(meridian: Meridian) -> Color {
+-        let amAveragedPrices = prices.first?.average
+-        let pmAveragedPrices = prices.last?.average
+-        guard let averagedPrice = meridian == .am ? amAveragedPrices : pmAveragedPrices else {
+-            return .clear
+-        }
+-        return isEntered(meridian: meridian) ? .acText : color(price: Int(averagedPrice))
+-    }
+-
+-    private var amMinMaxPrices: String {
+-        guard let min = prices.first?.first,
+-            let max = prices.first?.last else {
+-                return ""
+-        }
+-        if isEntered(meridian: .am) {
+-            return "\(min)"
+-        } else {
+-            return "\(min) - \(max)"
+-        }
+-    }
+-
+-    private var pmMinMaxPrices: String {
+-        guard let min = prices.last?.first,
+-            let max = prices.last?.last else {
+-                return ""
+-        }
+-        if isEntered(meridian: .pm) {
+-            return "\(min)"
+-        } else {
+-            return "\(min) - \(max)"
+-        }
+-    }
+-}
+-
+-struct TurnipsMinMaxPriceRow_Previews: PreviewProvider {
+-    static var previews: some View {
+-        NavigationView {
+-            List {
+-                TurnipsMinMaxPriceRow(label: "Mon", prices: [[90, 90], [81, 141]], averagePrices: [90, 95])
+-                TurnipsMinMaxPriceRow(label: "Mon", prices: [[60, 90], [81, 81]], averagePrices: [70, 81])
+-                TurnipsMinMaxPriceRow(label: "Mon", prices: [[40, 81], [250, 600]], averagePrices: [40, 600])
+-            }
+-        }
+-    }
+-}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsPriceRow.swift b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsPriceRow.swift
+deleted file mode 100644
+index 41a965f9..00000000
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsPriceRow.swift
++++ /dev/null
+@@ -1,48 +0,0 @@
+-//
+-//  TurnipsPriceRow.swift
+-//  ACHNBrowserUI
+-//
+-//  Created by Renaud JENNY on 22/05/2020.
+-//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+-//
+-
+-import SwiftUI
+-
+-protocol TurnipsPriceRow {
+-    var label: String { get }
+-    var averagePrices: [Int] { get }
+-    var minMaxPrices: [[Int]] { get }
+-}
+-
+-extension TurnipsPriceRow {
+-    typealias Meridian = TurnipsAveragePriceRow.Meridian
+-
+-    func color(price: Int) -> Color {
+-        if price <= 90 {
+-            return .red
+-        } else if price >= 150 {
+-            return .acTabBarBackground
+-        } else {
+-            return .acSecondaryText
+-        }
+-    }
+-
+-    func isEntered(meridian: Meridian) -> Bool {
+-        switch meridian {
+-        case .am:
+-            guard let price = averagePrices.first,
+-                let minMaxFirst = minMaxPrices.first?.first,
+-                let minMaxSecond = minMaxPrices.first?.last else {
+-                    return false
+-            }
+-            return price == minMaxFirst && price == minMaxSecond && minMaxFirst == minMaxSecond
+-        case .pm:
+-            guard let price = averagePrices.last,
+-                let minMaxFirst = minMaxPrices.last?.first,
+-                let minMaxSecond = minMaxPrices.last?.last else {
+-                    return false
+-            }
+-            return price == minMaxFirst && price == minMaxSecond && minMaxFirst == minMaxSecond
+-        }
+-    }
+-}

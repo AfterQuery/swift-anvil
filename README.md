@@ -1,0 +1,168 @@
+# Anvil Swift
+
+A benchmark for evaluating LLM coding agents on real-world Swift/iOS tasks. Agents receive a problem statement, generate a patch, and are evaluated by compiling the project and running XCTest unit tests.
+
+## Setup
+
+**1. Install dependencies**
+
+```bash
+uv venv
+source .venv/bin/activate
+uv sync
+```
+
+**2. Install Xcode prerequisites**
+
+```bash
+xcode-select --install
+xcodebuild -downloadPlatform iOS
+```
+
+**3. Configure environment**
+
+Copy `.env.example` to `.env` and fill in:
+
+- `OPENROUTER_API_KEY` (or whichever provider you're using)
+- `REGISTRY_USERNAME` - your Docker Hub username
+- `REGISTRY_PASSWORD` - a Docker Hub [access token](https://hub.docker.com/settings/security)
+
+**4. Clone source repositories**
+
+Clone the repo you want to evaluate into the `repos/` directory:
+
+```bash
+git clone https://github.com/Dimillian/ACHNBrowserUI repos/ACHNBrowserUI
+```
+
+**5. Authenticate services**
+
+Make sure Docker is running locally, then:
+
+```bash
+modal setup          # Modal account for sandboxed agent execution
+docker login         # Docker Hub for image pulls
+```
+
+**6. Create a private Docker Hub repository**
+
+Go to [hub.docker.com](https://hub.docker.com) and create a new **private** repository (e.g., `anvil-images`).
+
+> ⚠️ Public repos will not work—Anvil refuses to push task images to public repositories to prevent data leakage.
+
+## Usage
+
+### Publish task images
+
+Build and push Docker images for a dataset to your private repo:
+
+```bash
+anvil publish-images --dataset datasets/ACHNBrowserUI
+```
+
+The username and repo are read from `REGISTRY_USERNAME` and `REGISTRY_REPO` in `.env` (or pass `-u <username>` / `--repo <name>` to override).
+
+Modal sandboxes pull images from Docker Hub, so task images need to be pushed there first.
+
+To remove local anvil images: `docker rmi $(docker images $(grep REGISTRY_USERNAME .env | cut -d= -f2)/anvil-images -q) --force`
+
+### Warm the build cache (one-time)
+
+Pre-builds every base commit so subsequent evals only do fast incremental builds:
+
+```bash
+anvil warm-xcode-cache --dataset datasets/ACHNBrowserUI
+```
+
+Cached DerivedData is stored in `.xcode-cache/` in the project root. This takes a few minutes per unique base commit but only needs to run once.
+
+### Run evaluations
+
+**Via GitHub Actions (recommended):**
+
+Use the [Anvil Eval workflow](https://github.com/AfterQuery/anvil-swift/actions/workflows/eval.yml) to run evaluations in CI. Click **Run workflow**, pick a dataset, model, and agent from the dropdowns, then set the number of attempts. Results are uploaded as artifacts on the workflow run.
+
+**Locally:**
+
+```bash
+anvil run-evals \
+  --dataset datasets/ACHNBrowserUI \
+  --model openrouter/anthropic/claude-sonnet-4.5 \
+  --agent mini-swe-agent \
+  --n-attempts 4
+```
+
+Use `--n-attempts` to control how many runs per task (useful for pass@k metrics). Results are saved to `<dataset>/runs/<agent>_<model>/`.
+
+> 💡 **Progress is saved automatically** to minimize costs. If you re-run the same command, completed tasks are skipped. Use `--no-continue` to start fresh.
+
+### Validate task tests
+
+Check that your `tests.swift` files behave correctly on the unpatched base commit:
+
+```bash
+anvil validate-tests --dataset datasets/ACHNBrowserUI
+```
+
+Tests are categorized by **class name**:
+
+- Classes containing `F2P` (e.g. `AnvilTask1F2PTests`) — **fail-to-pass**; must fail on base
+- All other classes (repo's own tests, `AnvilTask2P2PTests`, etc.) — **pass-to-pass**; must pass on base
+
+The command reports inconsistencies (f2p tests that pass, or p2p tests that fail on the unpatched commit).
+
+### Oracle Agent
+
+Use the `oracle` agent to validate your task harnesses before running LLM agents:
+
+```bash
+anvil run-evals --dataset datasets/ACHNBrowserUI --agent oracle
+```
+
+The oracle agent skips LLM rollouts and applies gold patches from `gold_patches.json` directly. All tests should pass if your harness is correct.
+
+Each dataset needs a `xcode_config.yaml` in its source tasks directory (e.g. `tasks/ACHNBrowserUI/xcode_config.yaml`) specifying the Xcode project/workspace, scheme, and build destination.
+
+### Options
+
+| Flag                   | Default                 | Description                                         |
+| ---------------------- | ----------------------- | --------------------------------------------------- |
+| `--model`              | —                       | Model ID (required for agents, optional for oracle) |
+| `--dataset`            | —                       | Dataset ID or path                                  |
+| `--agent`              | mini-swe-agent          | Agent to use (`mini-swe-agent` or `oracle`)         |
+| `--n-attempts`         | 1                       | Attempts per task (for pass@k)                      |
+| `--compile-only`       | false                   | Only check compilation, skip unit tests             |
+| `--no-continue`        | false                   | Start fresh, ignore previous results                |
+| `--max-parallel`       | 30                      | Concurrent agent runs                               |
+| `--max-wait`           | auto                    | Minutes to wait for Modal rate limits               |
+| `--eval-backend`       | `xcode`                 | `xcode` (local macOS) or `modal` (Docker/Modal)     |
+| `--dockerhub-username` | `REGISTRY_USERNAME` env | Docker Hub username (modal backend)                 |
+| `--dockerhub-repo`     | `anvil-images`          | Docker Hub repo name (modal backend)                |
+
+## How it works
+
+1. **Agent phase**: Each task runs in a Modal sandbox using a pre-built Docker image. The agent (mini-swe-agent) receives the problem statement and generates a patch.
+
+2. **Eval phase**: Patches are applied to a local worktree with cached DerivedData. `xcodebuild` compiles the patched project and runs per-task unit tests (from `tests.swift`). Each worker gets its own simulator clone to avoid boot conflicts during parallel evaluation.
+
+3. **Output**: Trajectories, patches, stdout/stderr, and eval results are saved per-task. A summary with pass@k metrics is printed at the end.
+
+## Writing task tests
+
+Each task's `tests.swift` is copied into the test target during evaluation. Use XCTest class names to indicate test category:
+
+```swift
+// Fail-to-pass: tests new functionality introduced by the gold patch.
+// Must FAIL on the unpatched base commit, PASS after the patch.
+final class AnvilTask1F2PTests: XCTestCase {
+    func testNewFeature() { ... }
+}
+
+// Pass-to-pass: regression tests for existing functionality.
+// Must PASS on both the base commit and after the patch.
+final class AnvilTask1P2PTests: XCTestCase {
+    func testExistingBehavior() { ... }
+}
+```
+
+The repo's own pre-existing tests are automatically treated as pass-to-pass. Run `anvil validate-tests` to verify consistency before running model evaluations.
