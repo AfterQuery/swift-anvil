@@ -34,6 +34,9 @@ from .xcode_parser import (
     parse_xcodebuild_output,
 )
 from .constants import (
+    BUILD_GATE_SECONDS,
+    DEFAULT_MAX_WORKERS,
+    DEFAULT_XCODEBUILD_TIMEOUT,
     OUTPUT_KEY_TESTS,
     SYNTHETIC_TEST_NAMES,
     TEST_NAME_COMPILATION,
@@ -48,27 +51,18 @@ from .constants import (
     TEST_TYPE_APP,
     TEST_TYPE_SPM,
     TEST_TYPE_UI,
+    UI_TO_APP_CONFIG_KEYS,
 )
 from .simulator_pool import SimulatorPool
 from .test_file_copier import TestFileCopier
 
 logger = logging.getLogger(__name__)
 
-
-def _task_name(instance_id: str) -> str:
-    """Extract the task name from a dotted instance ID (e.g. ``"Repo.task-4"`` → ``"task-4"``)."""
-    return TestFileCopier._task_name(instance_id)
-
-
 # Per-worker simulator UDID (thread-local for ThreadPoolExecutor).
 _tls = threading.local()
 
 # Serialises xcodebuild starts to avoid build-service daemon deadlocks.
 _build_start_lock: threading.Lock | None = None
-
-_DEFAULT_XCODEBUILD_TIMEOUT = 600
-_DEFAULT_MAX_WORKERS = 3
-_BUILD_GATE_SECONDS = 1
 _last_build_start: float = 0.0
 
 
@@ -93,7 +87,7 @@ def _gate_build_start() -> None:
         return
     with _build_start_lock:
         now = time.monotonic()
-        wait = _BUILD_GATE_SECONDS - (now - _last_build_start)
+        wait = BUILD_GATE_SECONDS - (now - _last_build_start)
         if wait > 0:
             time.sleep(wait)
         _last_build_start = time.monotonic()
@@ -102,13 +96,7 @@ def _gate_build_start() -> None:
 def _as_ui_test_config(xcode_config: dict) -> dict:
     """Map ui_test_* keys → app_test_* so run/cache functions work for UI tests."""
     overrides: dict = {}
-    for ui_key, app_key in (
-        ("ui_test_scheme", "app_test_scheme"),
-        ("ui_test_target", "app_test_target"),
-        ("ui_test_files_dest", "app_test_files_dest"),
-        ("ui_test_destination", "app_test_destination"),
-        ("ui_test_bundle_id", "app_test_bundle_id"),
-    ):
+    for ui_key, app_key in UI_TO_APP_CONFIG_KEYS:
         val = xcode_config.get(ui_key)
         if val is not None:
             overrides[app_key] = val
@@ -148,7 +136,7 @@ def _run_spm_tests(
         test_dd = dd_dir
     return _run_xcodebuild_tests(
         _build_xcodebuild_test_cmd(xcode_config, worktree_dir, test_dd),
-        timeout=_DEFAULT_XCODEBUILD_TIMEOUT,
+        timeout=DEFAULT_XCODEBUILD_TIMEOUT,
     )
 
 
@@ -184,7 +172,7 @@ def _run_app_tests(
 
     build_cmd = _as_build_for_testing(test_cmd)
     build_result = _run_xcodebuild(
-        build_cmd, str(test_cwd), _DEFAULT_XCODEBUILD_TIMEOUT
+        build_cmd, str(test_cwd), DEFAULT_XCODEBUILD_TIMEOUT
     )
 
     if build_result.returncode != 0:
@@ -241,7 +229,7 @@ def _run_app_tests(
                     app_test_dd,
                 )
 
-    test_result = _run_xcodebuild(run_cmd, str(test_cwd), _DEFAULT_XCODEBUILD_TIMEOUT)
+    test_result = _run_xcodebuild(run_cmd, str(test_cwd), DEFAULT_XCODEBUILD_TIMEOUT)
 
     output = parse_xcodebuild_output(test_result.stdout, test_result.stderr)
     if test_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
@@ -438,7 +426,7 @@ def eval_single_patch(
             )
 
             build_result = _run_xcodebuild(
-                build_cmd, str(worktree_dir), _DEFAULT_XCODEBUILD_TIMEOUT
+                build_cmd, str(worktree_dir), DEFAULT_XCODEBUILD_TIMEOUT
             )
 
             build_output = parse_build_result(
@@ -625,7 +613,7 @@ def run_xcode_evals(
             src_tasks = candidate
 
     if max_workers is None:
-        max_workers = _DEFAULT_MAX_WORKERS
+        max_workers = DEFAULT_MAX_WORKERS
 
     eval_results: dict[str, bool] = {}
 
@@ -635,7 +623,7 @@ def run_xcode_evals(
             iid = ps["instance_id"]
             if iid not in _has_tests_cache:
                 _has_tests_cache[iid] = (
-                    src_tasks / _task_name(iid) / "tests.swift"
+                    src_tasks / TestFileCopier._task_name(iid) / "tests.swift"
                 ).is_file()
 
     def _has_tests(iid: str) -> bool:
@@ -849,7 +837,7 @@ def validate_task_tests(
     tasks_with_tests = []
     for inst in instances:
         iid = inst["instance_id"]
-        if (src_tasks / _task_name(iid) / "tests.swift").is_file():
+        if (src_tasks / TestFileCopier._task_name(iid) / "tests.swift").is_file():
             tasks_with_tests.append(inst)
 
     if not tasks_with_tests:
@@ -857,7 +845,7 @@ def validate_task_tests(
         return 0
 
     if max_workers is None:
-        max_workers = min(len(tasks_with_tests), _DEFAULT_MAX_WORKERS)
+        max_workers = min(len(tasks_with_tests), DEFAULT_MAX_WORKERS)
     max_workers = min(max_workers, len(tasks_with_tests))
 
     typer.echo(
@@ -895,7 +883,7 @@ def validate_task_tests(
 
         def _validate_one(inst: dict) -> tuple[str, dict | None]:
             iid = inst["instance_id"]
-            task_name = _task_name(iid)
+            task_name = TestFileCopier._task_name(iid)
             if sim_pool and sim_pool.udids:
                 idx = threading.current_thread()._anvil_idx  # type: ignore[attr-defined]
                 _tls.sim_udid = sim_pool.udids[idx]
@@ -926,7 +914,7 @@ def validate_task_tests(
             future_to_task: dict = {}
             for inst in tasks_with_tests:
                 future = pool.submit(_validate_one, inst)
-                future_to_task[future] = _task_name(inst["instance_id"])
+                future_to_task[future] = TestFileCopier._task_name(inst["instance_id"])
 
             pbar = tqdm(
                 as_completed(future_to_task),

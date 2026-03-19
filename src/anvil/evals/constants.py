@@ -64,6 +64,22 @@ XCODEBUILD_FAILED = "failed"
 OUTPUT_KEY_TESTS = "tests"
 
 # -----------------------------------------------------------------------------
+# Eval / build settings
+# -----------------------------------------------------------------------------
+DEFAULT_XCODEBUILD_TIMEOUT = 600
+DEFAULT_MAX_WORKERS = 3
+BUILD_GATE_SECONDS = 1
+
+# UI test config keys → app test config keys (for _as_ui_test_config mapping)
+UI_TO_APP_CONFIG_KEYS = (
+    ("ui_test_scheme", "app_test_scheme"),
+    ("ui_test_target", "app_test_target"),
+    ("ui_test_files_dest", "app_test_files_dest"),
+    ("ui_test_destination", "app_test_destination"),
+    ("ui_test_bundle_id", "app_test_bundle_id"),
+)
+
+# -----------------------------------------------------------------------------
 # Synthetic / infrastructure test names
 # -----------------------------------------------------------------------------
 TEST_NAME_COMPILATION = "compilation"
