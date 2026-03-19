@@ -31,8 +31,13 @@ from .xcode_parser import (
     parse_build_result,
     parse_xcodebuild_output,
 )
+from .build_gate import (
+    activate as activate_build_gate,
+    deactivate as deactivate_build_gate,
+    gate_build_start,
+    make_thread_index_initializer,
+)
 from .constants import (
-    BUILD_GATE_SECONDS,
     DEFAULT_MAX_WORKERS,
     DEFAULT_XCODEBUILD_TIMEOUT,
     OUTPUT_KEY_TESTS,
@@ -60,37 +65,6 @@ logger = logging.getLogger(__name__)
 
 # Per-worker simulator UDID (thread-local for ThreadPoolExecutor).
 _tls = threading.local()
-
-# Serialises xcodebuild starts to avoid build-service daemon deadlocks.
-_build_start_lock: threading.Lock | None = None
-_last_build_start: float = 0.0
-
-
-def _make_thread_index_initializer():
-    """Create a thread initializer that assigns _anvil_idx to each worker thread."""
-    thread_idx = [0]
-    lock = threading.Lock()
-
-    def _init():
-        with lock:
-            idx = thread_idx[0]
-            thread_idx[0] += 1
-        threading.current_thread()._anvil_idx = idx  # type: ignore[attr-defined]
-
-    return _init
-
-
-def _gate_build_start() -> None:
-    """Acquire the build gate, ensuring a minimum gap between xcodebuild starts."""
-    global _last_build_start
-    if _build_start_lock is None:
-        return
-    with _build_start_lock:
-        now = time.monotonic()
-        wait = BUILD_GATE_SECONDS - (now - _last_build_start)
-        if wait > 0:
-            time.sleep(wait)
-        _last_build_start = time.monotonic()
 
 
 def _as_ui_test_config(xcode_config: dict) -> dict:
@@ -168,7 +142,7 @@ def _run_app_tests(
                     "Removed stale xctestrun before build-for-testing: %s", stale
                 )
 
-    _gate_build_start()
+    gate_build_start()
 
     build_cmd = _as_build_for_testing(test_cmd)
     build_result = _run_xcodebuild(
@@ -416,7 +390,7 @@ def eval_single_patch(
         if test_type in (TEST_TYPE_APP, TEST_TYPE_UI) or spm_standalone:
             build_output = {OUTPUT_KEY_TESTS: []}
         else:
-            _gate_build_start()
+            gate_build_start()
 
             build_cmd = _build_xcodebuild_cmd(
                 xcode_config,
@@ -558,8 +532,6 @@ def run_xcode_evals(
     dataset_id: str | None = None,
 ) -> dict[str, bool]:
     """Run Xcode evals for a batch of patches. Returns instance_id → pass/fail."""
-    global _build_start_lock
-
     xcode_config = load_xcode_config(dataset_tasks_dir, dataset_id=dataset_id)
     cache = XcodeBuildCache()
 
@@ -649,7 +621,7 @@ def run_xcode_evals(
         and "generic/" not in test_destination
     )
 
-    _build_start_lock = threading.Lock()
+    activate_build_gate()
 
     passed_count = 0
     eval_durations: list[float] = []
@@ -686,7 +658,7 @@ def run_xcode_evals(
 
         with ThreadPoolExecutor(
             max_workers=actual_workers,
-            initializer=_make_thread_index_initializer(),
+            initializer=make_thread_index_initializer(),
         ) as pool:
             future_to_patch = {}
             for patch_sample in real_patches:
@@ -761,7 +733,7 @@ def run_xcode_evals(
                 status = "pass" if eval_results.get(result_key) else "fail"
                 pbar.set_postfix_str(f"{passed}/{total} passed, {tag} {status}")
     finally:
-        _build_start_lock = None
+        deactivate_build_gate()
         if sim_pool:
             typer.echo(f"Cleaning up {len(sim_pool.udids)} eval simulators...")
             sim_pool.destroy()
