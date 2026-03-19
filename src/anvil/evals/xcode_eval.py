@@ -29,8 +29,10 @@ from .xcode_cache import (
     _build_xcodebuild_app_test_cmd,
     _build_xcodebuild_cmd,
     _build_xcodebuild_test_cmd,
+    _pbx_uuid,
     _run_xcodebuild,
     inject_app_test_target,
+    inject_ui_test_target,
     load_xcode_config,
     resolve_test_package_path,
 )
@@ -41,6 +43,12 @@ from .xcode_parser import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _task_name(instance_id: str) -> str:
+    """Extract the task name from a dotted instance ID (e.g. ``"Repo.task-4"`` → ``"task-4"``)."""
+    return instance_id.split(".")[-1]
+
 
 # Per-worker simulator UDID and index (thread-local for ThreadPoolExecutor).
 _tls = threading.local()
@@ -162,24 +170,28 @@ def _destroy_simulator_pool(udids: list[str]) -> None:
 
 
 def _detect_test_type(tests_file: Path, xcode_config: dict) -> str:
-    """Detect whether a ``tests.swift`` targets the app module or SPM backend.
+    """Detect whether a ``tests.swift`` is a UI test, app unit test, or SPM test.
 
-    Reads the first 10 lines looking for ``@testable import <module>``.
-    Checks against ``app_test_module`` (the app's Swift module name) and
-    ``app_test_scheme`` as fallback.  Returns ``"app"`` on match,
-    ``"spm"`` otherwise (or when no app test config exists).
+    Checks (in order):
+    1. ``XCUIApplication`` anywhere in the first 500 chars → ``"ui"``
+    2. ``@testable import <module>`` matching ``app_test_module``/``app_test_scheme`` → ``"app"``
+    3. Everything else → ``"spm"``
     """
+    try:
+        head = tests_file.read_text()[:500]
+    except OSError:
+        return "spm"
+
+    # XCUIApplication is the definitive marker for UI tests.
+    if xcode_config.get("ui_test_target") and "XCUIApplication" in head:
+        return "ui"
+
     app_modules = set()
     for key in ("app_test_module", "app_test_scheme"):
         val = xcode_config.get(key, "")
         if val:
             app_modules.add(val)
     if not app_modules:
-        return "spm"
-
-    try:
-        head = tests_file.read_text()[:500]
-    except OSError:
         return "spm"
 
     for line in head.splitlines()[:10]:
@@ -212,19 +224,42 @@ def _copy_task_tests(
     if not source_tasks_dir:
         return ""
 
-    parts = instance_id.split(".")
-    task_name = parts[-1] if len(parts) > 1 else instance_id
-    tests_file = source_tasks_dir / task_name / "tests.swift"
+    tests_file = source_tasks_dir / _task_name(instance_id) / "tests.swift"
 
     if not tests_file.is_file():
         return ""
 
     test_type = _detect_test_type(tests_file, xcode_config)
 
-    if test_type == "app":
+    if test_type == "ui":
+        return _copy_ui_tests(instance_id, tests_file, xcode_config, worktree_dir)
+    elif test_type == "app":
         return _copy_app_tests(instance_id, tests_file, xcode_config, worktree_dir)
     else:
         return _copy_spm_tests(instance_id, tests_file, xcode_config, worktree_dir)
+
+
+def _copy_task_uitests(
+    instance_id: str,
+    source_tasks_dir: Path | None,
+    xcode_config: dict,
+    worktree_dir: Path,
+) -> bool:
+    """Copy the task's ``uitests.swift`` into the UI test target, if present.
+
+    Always routes to the UI test target regardless of content.  Returns True
+    if the file was found and copied, False otherwise.
+    """
+    if not source_tasks_dir:
+        return False
+
+    uitests_file = source_tasks_dir / _task_name(instance_id) / "uitests.swift"
+
+    if not uitests_file.is_file():
+        return False
+
+    result = _copy_ui_tests(instance_id, uitests_file, xcode_config, worktree_dir)
+    return result == "ui"
 
 
 def _validate_pbxproj(worktree_dir: Path, project_rel: str) -> str | None:
@@ -273,35 +308,80 @@ def _add_file_to_pbxproj(
     file_path: Path,
     target_name: str,
 ) -> None:
-    """Add a file to a pbxproj target's compile sources.
+    """Add a Swift source file to a pbxproj target's compile sources.
 
-    *file_path* is the absolute path to the file on disk.
-    *project_rel* is the xcodeproj path relative to the worktree root.
+    Uses string manipulation (consistent with ``_inject_test_target`` in
+    xcode_cache.py) so it works reliably on pbxproj files that have already
+    been modified by our injection code without requiring the pbxproj library
+    to successfully re-parse the manually-modified format.
     """
     pbxproj_path = worktree_dir / project_rel / "project.pbxproj"
     if not pbxproj_path.exists():
         return
 
-    if XcodeProject is None:
-        logger.warning(
-            "pbxproj not installed: cannot inject %s into target %s",
-            file_path,
-            target_name,
-        )
+    file_name = file_path.name
+    pbx = pbxproj_path.read_text()
+
+    if file_name in pbx:
+        logger.debug("File %s already in pbxproj, skipping", file_name)
         return
 
-    try:
-        project = XcodeProject.load(str(pbxproj_path))
-        # rel_path must be relative to the xcodeproj's parent dir
-        # (SOURCE_ROOT), not the worktree root — otherwise pbxproj
-        # doubles the project subdirectory component.
-        project_dir = (worktree_dir / project_rel).parent
-        rel_path = str(file_path.relative_to(project_dir))
-        project.add_file(rel_path, target_name=target_name)
-        project.save()
-        logger.info("Added %s to target %s in pbxproj", rel_path, target_name)
-    except Exception as exc:
-        logger.warning("pbxproj injection failed for %s: %s", target_name, exc)
+    file_ref_uuid = _pbx_uuid(f"{target_name}-{file_name}-fileref")
+    build_uuid = _pbx_uuid(f"{target_name}-{file_name}-buildfile")
+
+    # 1. PBXBuildFile + PBXFileReference entries
+    pbx = pbx.replace(
+        "/* End PBXBuildFile section */",
+        f"\t\t{build_uuid} /* {file_name} in Sources */ = "
+        f"{{isa = PBXBuildFile; fileRef = {file_ref_uuid} /* {file_name} */; }};\n"
+        "/* End PBXBuildFile section */",
+    )
+    pbx = pbx.replace(
+        "/* End PBXFileReference section */",
+        f"\t\t{file_ref_uuid} /* {file_name} */ = {{isa = PBXFileReference; "
+        f"lastKnownFileType = sourcecode.swift; path = {file_name}; "
+        f'sourceTree = "<group>"; }};\n'
+        "/* End PBXFileReference section */",
+    )
+
+    # 2. Add fileref to the target's PBXGroup children
+    if m := re.search(
+        rf"\w{{24}} /\* {re.escape(target_name)} \*/ = \{{\s*isa = PBXGroup;"
+        rf".*?children = \((.*?)\);",
+        pbx,
+        re.DOTALL,
+    ):
+        pos = m.start(1) + len(m.group(1))
+        pbx = pbx[:pos] + f"\n\t\t\t\t{file_ref_uuid} /* {file_name} */," + pbx[pos:]
+
+    # 3. Add build file to the target's PBXSourcesBuildPhase
+    if (
+        (
+            m_target := re.search(
+                rf"\w{{24}} /\* {re.escape(target_name)} \*/ = \{{\s*isa = PBXNativeTarget;"
+                rf".*?buildPhases = \(([^)]*)\)",
+                pbx,
+                re.DOTALL,
+            )
+        )
+        and (m_src := re.search(r"(\w{24}) /\* Sources \*/", m_target.group(1)))
+        and (
+            m_phase := re.search(
+                rf"{re.escape(m_src.group(1))} /\* Sources \*/ = \{{.*?files = \(([^)]*)\)",
+                pbx,
+                re.DOTALL,
+            )
+        )
+    ):
+        pos = m_phase.start(1) + len(m_phase.group(1))
+        pbx = (
+            pbx[:pos]
+            + f"\n\t\t\t\t{build_uuid} /* {file_name} in Sources */,"
+            + pbx[pos:]
+        )
+
+    pbxproj_path.write_text(pbx)
+    logger.info("Added %s to target %s in pbxproj", file_name, target_name)
 
 
 def _propagate_pods_framework_paths(
@@ -484,6 +564,63 @@ def _copy_app_tests(
     return "app"
 
 
+def _copy_ui_tests(
+    instance_id: str,
+    tests_file: Path,
+    xcode_config: dict,
+    worktree_dir: Path,
+) -> str:
+    """Copy tests into the UI-test target.
+
+    Injects the UI-test target into the project if it doesn't exist, then
+    copies the test file and adds it to the target's compile sources via pbxproj.
+    """
+    ui_test_target = xcode_config.get("ui_test_target", "")
+    ui_test_files_dest = xcode_config.get("ui_test_files_dest", "")
+    if not ui_test_target or not ui_test_files_dest:
+        logger.warning(
+            "ui_test_target/ui_test_files_dest not configured for %s", instance_id
+        )
+        return ""
+
+    inject_ui_test_target(xcode_config, worktree_dir)
+
+    dest_dir = worktree_dir / ui_test_files_dest
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    dst = dest_dir / tests_file.name
+    shutil.copy2(str(tests_file), str(dst))
+    logger.info("Copied test file %s → %s (ui)", tests_file.name, dest_dir)
+
+    project_rel = xcode_config.get("project", "")
+    if project_rel:
+        _add_file_to_pbxproj(worktree_dir, project_rel, dst, ui_test_target)
+
+    return "ui"
+
+
+def _as_ui_test_config(xcode_config: dict) -> dict:
+    """Map ``ui_test_*`` keys → ``app_test_*`` so existing run/cache functions work for UI tests.
+
+    The xcodebuild command for UI tests is identical to app unit tests (same
+    flags, same build-for-testing / test-without-building split).  Normalising
+    the config here lets :func:`_run_app_tests` and
+    :func:`_build_xcodebuild_app_test_cmd` handle both types without changes.
+    """
+    overrides: dict = {}
+    for ui_key, app_key in (
+        ("ui_test_scheme", "app_test_scheme"),
+        ("ui_test_target", "app_test_target"),
+        ("ui_test_files_dest", "app_test_files_dest"),
+        ("ui_test_destination", "app_test_destination"),
+        ("ui_test_bundle_id", "app_test_bundle_id"),
+    ):
+        val = xcode_config.get(ui_key)
+        if val is not None:
+            overrides[app_key] = val
+    return {**xcode_config, **overrides}
+
+
 def _run_xcodebuild_tests(
     cmd_info: tuple[list[str], Path] | None,
     timeout: int,
@@ -534,6 +671,8 @@ def _run_spm_tests(
 def _run_app_tests(
     xcode_config: dict,
     worktree_dir: Path,
+    derived_data_dir: Path | None = None,
+    is_ui_test: bool = False,
 ) -> dict | None:
     """Run app-level unit tests via build-for-testing then test-without-building.
 
@@ -541,7 +680,7 @@ def _run_app_tests(
     deadlocks when multiple parallel workers hit the Xcode build-service
     daemon simultaneously, and gives each phase its own timeout.
     """
-    app_test_dd = worktree_dir / "DerivedData-app-tests"
+    app_test_dd = derived_data_dir or worktree_dir / "DerivedData-app-tests"
     cmd_info = _build_xcodebuild_app_test_cmd(
         xcode_config,
         worktree_dir,
@@ -551,6 +690,16 @@ def _run_app_tests(
         return None
 
     test_cmd, test_cwd = cmd_info
+
+    # For UI tests the cached DerivedData contains an xctestrun generated before
+    # the UITest target was injected.  Deleting it forces build-for-testing to
+    # regenerate the xctestrun with the new target entry.
+    if is_ui_test:
+        products_dir = app_test_dd / "Build" / "Products"
+        if products_dir.exists():
+            for stale in products_dir.glob("*.xctestrun"):
+                stale.unlink()
+                logger.info("Removed stale xctestrun before build-for-testing: %s", stale)
 
     # Phase 1: build-for-testing — gate the start to avoid daemon deadlocks.
     _gate_build_start()
@@ -578,6 +727,49 @@ def _run_app_tests(
 
     # Phase 2: test-without-building (fast, no build contention).
     run_cmd = ["test-without-building" if c == "test" else c for c in test_cmd]
+
+    if is_ui_test:
+        products_dir = app_test_dd / "Build" / "Products"
+        xctestrun_files = (
+            sorted(products_dir.glob("*.xctestrun")) if products_dir.exists() else []
+        )
+        if xctestrun_files:
+            dest = xcode_config.get(
+                "app_test_destination",
+                xcode_config.get(
+                    "test_destination", xcode_config.get("destination", "")
+                ),
+            )
+            only_testing = xcode_config.get("app_test_target", "")
+            run_cmd = [
+                "xcodebuild",
+                "test-without-building",
+                "-xctestrun",
+                str(xctestrun_files[-1]),
+                "-destination",
+                dest,
+            ]
+            if only_testing:
+                run_cmd.extend(["-only-testing", only_testing])
+        else:
+            # Fallback for pre-Xcode 26 or when no xctestrun was generated.
+            app_name = xcode_config.get("app_bundle_name") or xcode_config.get(
+                "scheme", ""
+            )
+            app_bundle: Path | None = None
+            if app_name and products_dir.exists():
+                candidates = list(products_dir.glob(f"**/{app_name}.app"))
+                if candidates:
+                    app_bundle = candidates[0]
+            if app_bundle and app_bundle.exists():
+                run_cmd.append(f"UITargetAppPath={app_bundle}")
+            else:
+                logger.warning(
+                    "UITargetAppPath not found for UI tests in %s; "
+                    "test-without-building may fail",
+                    app_test_dd,
+                )
+
     test_result = _run_xcodebuild(run_cmd, str(test_cwd), _DEFAULT_XCODEBUILD_TIMEOUT)
 
     output = parse_xcodebuild_output(test_result.stdout, test_result.stderr)
@@ -594,6 +786,26 @@ def _run_app_tests(
     output["_stdout"] = build_result.stdout + "\n" + test_result.stdout
     output["_stderr"] = build_result.stderr + "\n" + test_result.stderr
     return output
+
+
+def _run_ui_tests(xcode_config: dict, worktree_dir: Path) -> dict | None:
+    """Run UI tests (``uitests.swift``) reusing the cached DerivedData directory.
+
+    We share ``DerivedData-app-tests`` with the unit-test run so that the app
+    binary is already compiled — the UI test runner is just an incremental
+    compile on top of it (seconds, not minutes).  Both phases run sequentially
+    so there is no concurrency issue with the shared directory.
+    """
+    ui_config = _as_ui_test_config(xcode_config)
+    # _as_ui_test_config maps ui_test_destination → app_test_destination, but
+    # xcode_config may already have app_test_destination set to a pool simulator
+    # UDID (id=...).  Restore it so UI tests run on the correct simulator.
+    if "id=" in xcode_config.get("app_test_destination", ""):
+        ui_config = {
+            **ui_config,
+            "app_test_destination": xcode_config["app_test_destination"],
+        }
+    return _run_app_tests(ui_config, worktree_dir, is_ui_test=True)
 
 
 def eval_single_patch(
@@ -703,6 +915,13 @@ def eval_single_patch(
         )
         has_task_tests = bool(test_type)
 
+        has_ui_tests = _copy_task_uitests(
+            instance_id,
+            source_tasks_dir,
+            xcode_config,
+            worktree_dir,
+        )
+
         all_stdout = ""
         all_stderr = ""
         dd_dir = worktree_dir / "DerivedData"
@@ -711,7 +930,7 @@ def eval_single_patch(
             xcode_config, worktree_dir
         )
 
-        if test_type == "app" or spm_standalone:
+        if test_type in ("app", "ui") or spm_standalone:
             build_output = {"tests": []}
         else:
             _gate_build_start()
@@ -748,20 +967,26 @@ def eval_single_patch(
 
         run_tests = has_task_tests or not compile_only
 
+        # Normalise UI test config to app_test_* keys so existing run functions
+        # work unchanged for both unit tests and UI tests.
+        run_config = (
+            _as_ui_test_config(xcode_config) if test_type == "ui" else xcode_config
+        )
+
         # Override test_destination with per-worker simulator when running
         # inside a pool with dedicated simulators (avoids boot conflicts).
-        test_xcode_config = xcode_config
+        test_xcode_config = run_config
         sim_udid = getattr(_tls, "sim_udid", None)
         if sim_udid:
             test_xcode_config = {
-                **xcode_config,
+                **run_config,
                 "test_destination": f"platform=iOS Simulator,id={sim_udid}",
                 "app_test_destination": f"platform=iOS Simulator,id={sim_udid}",
             }
 
         xctest_output = None
         if run_tests:
-            if test_type == "app":
+            if test_type in ("app", "ui"):
                 xctest_output = _run_app_tests(test_xcode_config, worktree_dir)
             else:
                 xctest_output = _run_spm_tests(
@@ -786,6 +1011,17 @@ def eval_single_patch(
                         }
                     ]
                 }
+
+            if has_ui_tests:
+                ui_output = _run_ui_tests(test_xcode_config, worktree_dir)
+                if ui_output:
+                    all_stdout += "\n" + ui_output.pop("_stdout", "")
+                    all_stderr += "\n" + ui_output.pop("_stderr", "")
+                    xctest_output = (
+                        merge_test_results(xctest_output, ui_output)
+                        if xctest_output
+                        else ui_output
+                    )
 
         if xctest_output:
             combined = merge_test_results(build_output, xctest_output)
@@ -953,9 +1189,8 @@ def run_xcode_evals(
         for ps in patches:
             iid = ps["instance_id"]
             if iid not in _has_tests_cache:
-                task_name = iid.split(".")[-1]
                 _has_tests_cache[iid] = (
-                    src_tasks / task_name / "tests.swift"
+                    src_tasks / _task_name(iid) / "tests.swift"
                 ).is_file()
 
     def _has_tests(iid: str) -> bool:
@@ -1024,6 +1259,7 @@ def run_xcode_evals(
     _build_start_lock = threading.Lock()
 
     passed_count = 0
+    eval_durations: list[float] = []
     sim_udids: list[str] = []
     try:
         if needs_sim_pool:
@@ -1038,7 +1274,8 @@ def run_xcode_evals(
                 idx = threading.current_thread()._anvil_idx  # type: ignore[attr-defined]
                 _tls.sim_udid = sim_udids[idx]
                 _tls.worker_index = idx
-            return eval_single_patch(
+            t0 = time.time()
+            result = eval_single_patch(
                 patch=patch_sample.get("patch", patch_sample.get("model_patch", "")),
                 instance_id=patch_sample["instance_id"],
                 base_commit=instance_map[patch_sample["instance_id"]]["base_commit"],
@@ -1051,6 +1288,8 @@ def run_xcode_evals(
                 compile_only=compile_only,
                 source_tasks_dir=src_tasks,
             )
+            eval_durations.append(time.time() - t0)
+            return result
 
         # Assign stable simulator indices to thread-pool threads.
         _thread_idx = 0
@@ -1155,7 +1394,11 @@ def run_xcode_evals(
             _destroy_simulator_pool(sim_udids)
 
     (output_dir / "eval_results.json").write_text(json.dumps(eval_results))
-    typer.echo(f"Xcode eval complete: {passed_count}/{len(eval_results)} passed")
+    avg_s = sum(eval_durations) / len(eval_durations) if eval_durations else 0
+    typer.echo(
+        f"Xcode eval complete: {passed_count}/{len(eval_results)} passed"
+        f"  |  avg eval time: {avg_s:.0f}s ({avg_s/60:.1f}m)"
+    )
 
     return eval_results
 
@@ -1193,8 +1436,7 @@ def validate_task_tests(
     tasks_with_tests = []
     for inst in instances:
         iid = inst["instance_id"]
-        task_name = iid.split(".")[-1]
-        if (src_tasks / task_name / "tests.swift").is_file():
+        if (src_tasks / _task_name(iid) / "tests.swift").is_file():
             tasks_with_tests.append(inst)
 
     if not tasks_with_tests:
@@ -1247,7 +1489,7 @@ def validate_task_tests(
 
         def _validate_one(inst: dict) -> tuple[str, dict | None]:
             iid = inst["instance_id"]
-            task_name = iid.split(".")[-1]
+            task_name = _task_name(iid)
             if sim_udids:
                 idx = threading.current_thread()._anvil_idx  # type: ignore[attr-defined]
                 _tls.sim_udid = sim_udids[idx]
@@ -1278,7 +1520,7 @@ def validate_task_tests(
             future_to_task: dict = {}
             for inst in tasks_with_tests:
                 future = pool.submit(_validate_one, inst)
-                future_to_task[future] = inst["instance_id"].split(".")[-1]
+                future_to_task[future] = _task_name(inst["instance_id"])
 
             pbar = tqdm(
                 as_completed(future_to_task),

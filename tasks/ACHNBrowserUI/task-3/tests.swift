@@ -97,7 +97,7 @@ final class AnvilTask3F2PTests: XCTestCase {
 
     func testToggleVariantAutoAddsParentItem() {
         let collection = UserCollection(iCloudDisabled: true)
-        let item = makeItem(filename: "anvil_auto_add_test", variationCount: 3)
+        let item = makeItem(name: "AnvilAutoAddTest", filename: "anvil_auto_add_test", variationCount: 3)
         let variant = item.variations![0]
 
         XCTAssertFalse(collection.items.contains(item),
@@ -111,7 +111,7 @@ final class AnvilTask3F2PTests: XCTestCase {
 
     func testToggleLastVariantAutoRemovesParentItem() {
         let collection = UserCollection(iCloudDisabled: true)
-        let item = makeItem(filename: "anvil_auto_remove_test", variationCount: 3)
+        let item = makeItem(name: "AnvilAutoRemoveTest", filename: "anvil_auto_remove_test", variationCount: 3)
         let variant = item.variations![0]
 
         _ = collection.toggleVariant(item: item, variant: variant)
@@ -124,7 +124,7 @@ final class AnvilTask3F2PTests: XCTestCase {
 
     func testParentRemainsWhenSomeVariantsStillLiked() {
         let collection = UserCollection(iCloudDisabled: true)
-        let item = makeItem(filename: "anvil_parent_remains_test", variationCount: 3)
+        let item = makeItem(name: "AnvilParentRemainsTest", filename: "anvil_parent_remains_test", variationCount: 3)
         let v0 = item.variations![0]
         let v1 = item.variations![1]
 

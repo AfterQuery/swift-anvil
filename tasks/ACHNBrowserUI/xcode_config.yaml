@@ -29,5 +29,16 @@ app_test_files_dest: ACHNBrowserUI/ACHNBrowserUITests
 app_test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
 app_test_module: AC_Helper
 
+# UI tests (XCUIApplication).  Tasks with tests.swift containing XCUIApplication
+# are automatically routed here.  The harness injects this target into project.pbxproj.
+ui_test_scheme: ACHNBrowserUI
+ui_test_target: ACHNBrowserUIUITests
+ui_test_files_dest: ACHNBrowserUI/ACHNBrowserUIUITests
+ui_test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
+ui_test_bundle_id: com.anvil.uitests
+# The PRODUCT_NAME differs from the scheme name; used to locate the .app bundle
+# in DerivedData when providing UITargetAppPath for test-without-building.
+app_bundle_name: "AC Helper"
+
 # This project has many SPM dependencies and takes longer than the default to build clean.
 build_timeout: 1800

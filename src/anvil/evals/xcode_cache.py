@@ -25,6 +25,11 @@ _PBX_UUID_LENGTH = 24
 _PBX_BUILD_ACTION_MASK = 2147483647  # INT32_MAX — Xcode default for all build phases
 
 
+def _pbx_uuid(seed: str) -> str:
+    """Deterministic 24-char uppercase hex UUID for pbxproj entries."""
+    return hashlib.md5(seed.encode()).hexdigest().upper()[:_PBX_UUID_LENGTH]
+
+
 def _apfs_clone(src: Path, dst: Path) -> None:
     """Copy a directory tree using APFS clonefile (instant COW on macOS).
 
@@ -127,9 +132,10 @@ class XcodeBuildCache:
     def is_warm(self, repo_name: str, base_commit: str) -> bool:
         # DerivedData populated, or main build was permanently marked as failing
         # (so test DDs can still be cached independently).
-        return _dd_is_populated(
-            self._derived_data_dir(repo_name, base_commit)
-        ) or self._main_build_failed_sentinel(repo_name, base_commit).exists()
+        return (
+            _dd_is_populated(self._derived_data_dir(repo_name, base_commit))
+            or self._main_build_failed_sentinel(repo_name, base_commit).exists()
+        )
 
     def ensure_cloned(self, repo_name: str, repo_path: Path) -> None:
         """Clone the repo into the cache and fetch all commits.
@@ -652,22 +658,27 @@ def _build_xcodebuild_test_cmd(
     return cmd, cwd
 
 
-def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
-    """Programmatically inject a unit-test target into the Xcode project.
+def _inject_test_target(
+    xcode_config: dict,
+    work_dir: Path,
+    *,
+    test_target: str,
+    files_dest: str,
+    project_rel: str,
+    bundle_id: str,
+    scheme_name: str,
+    product_type: str,
+    is_ui_test: bool,
+) -> bool:
+    """Inject a test target (unit-test or UI-test) into the Xcode project.
 
-    Creates the ``ACHNBrowserUITests`` target (or whatever ``app_test_target``
-    names) in the project.pbxproj and wires it into the scheme's TestAction.
-    Also creates the ``Info.plist`` on disk.
+    Writes pbxproj sections, wires the scheme's TestAction, creates Info.plist
+    and a placeholder Swift file.  Used by both :func:`inject_app_test_target`
+    (unit tests) and :func:`inject_ui_test_target` (UI tests).
 
-    This replaces a static patch approach because the pbxproj context lines
-    differ across base commits, but section markers and key UUIDs are stable.
-
-    Returns True if injection succeeded, False if skipped or failed.
+    Returns True on success, False when skipped or failed.
     """
-    app_test_target = xcode_config.get("app_test_target", "")
-    app_test_files_dest = xcode_config.get("app_test_files_dest", "")
-    project_rel = xcode_config.get("project", "")
-    if not app_test_target or not app_test_files_dest or not project_rel:
+    if not test_target or not files_dest or not project_rel:
         return False
 
     pbxproj_path = work_dir / project_rel / "project.pbxproj"
@@ -676,15 +687,12 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
         return False
 
     pbx = pbxproj_path.read_text()
-    if app_test_target in pbx:
-        logger.debug("Target %s already exists, skipping injection", app_test_target)
+    if test_target in pbx:
+        logger.debug("Target %s already exists, skipping injection", test_target)
         return True
 
-    def _uuid(seed: str) -> str:
-        return hashlib.md5(seed.encode()).hexdigest().upper()[:_PBX_UUID_LENGTH]
-
     uid = {
-        k: _uuid(f"{app_test_target}-{k}")
+        k: _pbx_uuid(f"{test_target}-{k}")
         for k in [
             "group",
             "info_plist_ref",
@@ -728,15 +736,15 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
     m = re.search(r"mainGroup = (\w{24})", pbx)
     main_group_uuid = m.group(1) if m else None
 
-    # Discover the app's PRODUCT_NAME for TEST_HOST
+    # Discover the app's PRODUCT_NAME for TEST_HOST (unit tests only)
     m = re.search(r"productReference = \w{24} /\* (.+?)\.app \*/", pbx)
     app_product_name = m.group(1) if m else xcode_config.get("scheme", "")
 
     # 1. PBXBuildFile
     pbx = pbx.replace(
         "/* End PBXBuildFile section */",
-        f"\t\t{uid['placeholder_build']} /* {app_test_target}Placeholder.swift in Sources */  = "
-        f"{{isa = PBXBuildFile; fileRef = {uid['placeholder_ref']} /* {app_test_target}Placeholder.swift */; }};\n"
+        f"\t\t{uid['placeholder_build']} /* {test_target}Placeholder.swift in Sources */  = "
+        f"{{isa = PBXBuildFile; fileRef = {uid['placeholder_ref']} /* {test_target}Placeholder.swift */; }};\n"
         "/* End PBXBuildFile section */",
     )
 
@@ -769,10 +777,10 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
         "/* End PBXFileReference section */",
         f"\t\t{uid['info_plist_ref']} /* Info.plist */ = "
         f'{{isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; }};\n'
-        f"\t\t{uid['placeholder_ref']} /* {app_test_target}Placeholder.swift */ = "
-        f'{{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {app_test_target}Placeholder.swift; sourceTree = "<group>"; }};\n'
-        f"\t\t{uid['product_ref']} /* {app_test_target}.xctest */ = "
-        f"{{isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = {app_test_target}.xctest; sourceTree = BUILT_PRODUCTS_DIR; }};\n"
+        f"\t\t{uid['placeholder_ref']} /* {test_target}Placeholder.swift */ = "
+        f'{{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {test_target}Placeholder.swift; sourceTree = "<group>"; }};\n'
+        f"\t\t{uid['product_ref']} /* {test_target}.xctest */ = "
+        f"{{isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = {test_target}.xctest; sourceTree = BUILT_PRODUCTS_DIR; }};\n"
         "/* End PBXFileReference section */",
     )
 
@@ -788,17 +796,15 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
     )
 
     # 5. PBXGroup for the test target
-    # Group path is relative to the project dir, so use just the target name
-    group_rel_path = app_test_target
     pbx = pbx.replace(
         "/* End PBXGroup section */",
-        f"\t\t{uid['group']} /* {app_test_target} */ = {{\n"
+        f"\t\t{uid['group']} /* {test_target} */ = {{\n"
         f"\t\t\tisa = PBXGroup;\n"
         f"\t\t\tchildren = (\n"
         f"\t\t\t\t{uid['info_plist_ref']} /* Info.plist */,\n"
-        f"\t\t\t\t{uid['placeholder_ref']} /* {app_test_target}Placeholder.swift */,\n"
+        f"\t\t\t\t{uid['placeholder_ref']} /* {test_target}Placeholder.swift */,\n"
         f"\t\t\t);\n"
-        f"\t\t\tpath = {group_rel_path};\n"
+        f"\t\t\tpath = {test_target};\n"
         f'\t\t\tsourceTree = "<group>";\n\t\t}};\n'
         "/* End PBXGroup section */",
     )
@@ -807,10 +813,9 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
     if main_group_uuid and products_group_uuid:
         pbx = pbx.replace(
             f"{products_group_uuid} /* Products */,",
-            f"{uid['group']} /* {app_test_target} */,\n\t\t\t\t{products_group_uuid} /* Products */,",
+            f"{uid['group']} /* {test_target} */,\n\t\t\t\t{products_group_uuid} /* Products */,",
             1,
         )
-        # Add product ref to Products group children (before closing paren)
         products_children_end = re.search(
             rf"{products_group_uuid} /\* Products \*/ = \{{\s*isa = PBXGroup;\s*children = \((.*?)\);",
             pbx,
@@ -820,16 +825,16 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
             insert_pos = products_children_end.end(1)
             pbx = (
                 pbx[:insert_pos]
-                + f"\n\t\t\t\t{uid['product_ref']} /* {app_test_target}.xctest */,"
+                + f"\n\t\t\t\t{uid['product_ref']} /* {test_target}.xctest */,"
                 + pbx[insert_pos:]
             )
 
     # 6. PBXNativeTarget
     pbx = pbx.replace(
         "/* End PBXNativeTarget section */",
-        f"\t\t{uid['target']} /* {app_test_target} */ = {{\n"
+        f"\t\t{uid['target']} /* {test_target} */ = {{\n"
         f"\t\t\tisa = PBXNativeTarget;\n"
-        f"\t\t\tbuildConfigurationList = {uid['config_list']} /* Build configuration list for PBXNativeTarget \"{app_test_target}\" */;\n"
+        f"\t\t\tbuildConfigurationList = {uid['config_list']} /* Build configuration list for PBXNativeTarget \"{test_target}\" */;\n"
         f"\t\t\tbuildPhases = (\n"
         f"\t\t\t\t{uid['sources_phase']} /* Sources */,\n"
         f"\t\t\t\t{uid['frameworks_phase']} /* Frameworks */,\n"
@@ -839,10 +844,10 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
         f"\t\t\tdependencies = (\n"
         f"\t\t\t\t{uid['target_dep']} /* PBXTargetDependency */,\n"
         f"\t\t\t);\n"
-        f"\t\t\tname = {app_test_target};\n"
-        f"\t\t\tproductName = {app_test_target};\n"
-        f"\t\t\tproductReference = {uid['product_ref']} /* {app_test_target}.xctest */;\n"
-        f'\t\t\tproductType = "com.apple.product-type.bundle.unit-test";\n'
+        f"\t\t\tname = {test_target};\n"
+        f"\t\t\tproductName = {test_target};\n"
+        f"\t\t\tproductReference = {uid['product_ref']} /* {test_target}.xctest */;\n"
+        f'\t\t\tproductType = "{product_type}";\n'
         f"\t\t}};\n"
         "/* End PBXNativeTarget section */",
     )
@@ -850,7 +855,7 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
     # 7. Add to project targets list
     pbx = re.sub(
         rf"(targets = \([^)]*{re.escape(host_target_uuid)}[^)]*)\);",
-        rf'\1\t\t\t\t{uid["target"]} /* {app_test_target} */,\n\t\t\t);',
+        rf'\1\t\t\t\t{uid["target"]} /* {test_target} */,\n\t\t\t);',
         pbx,
         count=1,
     )
@@ -885,7 +890,7 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
         f"\t\t\tisa = PBXSourcesBuildPhase;\n"
         f"\t\t\tbuildActionMask = {_PBX_BUILD_ACTION_MASK};\n"
         f"\t\t\tfiles = (\n"
-        f"\t\t\t\t{uid['placeholder_build']} /* {app_test_target}Placeholder.swift in Sources */,\n"
+        f"\t\t\t\t{uid['placeholder_build']} /* {test_target}Placeholder.swift in Sources */,\n"
         f"\t\t\t);\n"
         f"\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t}};\n"
         "/* End PBXSourcesBuildPhase section */",
@@ -915,7 +920,6 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
 
     # 12. XCBuildConfiguration (Debug + Release)
     iphoneos_target = xcode_config.get("iphoneos_deployment_target", "14.0")
-    bundle_id = xcode_config.get("app_test_bundle_id", "com.anvil.tests")
 
     dev_team = xcode_config.get("development_team", "")
     if not dev_team:
@@ -923,6 +927,16 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
         dev_team = m.group(1) if m else ""
 
     dev_team_line = f"\t\t\t\tDEVELOPMENT_TEAM = {dev_team};\n" if dev_team else ""
+
+    # Unit tests link against the host app binary; UI tests launch it externally.
+    host_link_settings = (
+        (
+            f'\t\t\t\tBUNDLE_LOADER = "$(TEST_HOST)";\n'
+            f'\t\t\t\tTEST_HOST = "$(BUILT_PRODUCTS_DIR)/{app_product_name}.app/{app_product_name}";\n'
+        )
+        if not is_ui_test
+        else (f'\t\t\t\tTEST_TARGET_NAME = "{scheme_name}";\n')
+    )
 
     for cfg_uuid, cfg_name in [
         (uid["config_debug"], "Debug"),
@@ -933,10 +947,10 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
             f"\t\t{cfg_uuid} /* {cfg_name} */ = {{\n"
             f"\t\t\tisa = XCBuildConfiguration;\n"
             f"\t\t\tbuildSettings = {{\n"
-            f'\t\t\t\tBUNDLE_LOADER = "$(TEST_HOST)";\n'
+            f"{host_link_settings}"
             f"\t\t\t\tCODE_SIGN_STYLE = Automatic;\n"
             f"{dev_team_line}"
-            f"\t\t\t\tINFOPLIST_FILE = {app_test_target}/Info.plist;\n"
+            f"\t\t\t\tINFOPLIST_FILE = {test_target}/Info.plist;\n"
             f"\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = {iphoneos_target};\n"
             f"\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (\n"
             f'\t\t\t\t\t"$(inherited)",\n'
@@ -947,7 +961,6 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
             f'\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";\n'
             f"\t\t\t\tSWIFT_VERSION = 5.0;\n"
             f'\t\t\t\tTARGETED_DEVICE_FAMILY = "1,2";\n'
-            f'\t\t\t\tTEST_HOST = "$(BUILT_PRODUCTS_DIR)/{app_product_name}.app/{app_product_name}";\n'
             f"\t\t\t}};\n"
             f"\t\t\tname = {cfg_name};\n\t\t}};\n"
             "/* End XCBuildConfiguration section */",
@@ -956,7 +969,7 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
     # 13. XCConfigurationList
     pbx = pbx.replace(
         "/* End XCConfigurationList section */",
-        f"\t\t{uid['config_list']} /* Build configuration list for PBXNativeTarget \"{app_test_target}\" */ = {{\n"
+        f"\t\t{uid['config_list']} /* Build configuration list for PBXNativeTarget \"{test_target}\" */ = {{\n"
         f"\t\t\tisa = XCConfigurationList;\n"
         f"\t\t\tbuildConfigurations = (\n"
         f"\t\t\t\t{uid['config_debug']} /* Debug */,\n"
@@ -971,26 +984,22 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
 
     # Update scheme to include test target in TestAction
     scheme_dir = work_dir / project_rel / "xcshareddata" / "xcschemes"
-    scheme_name = (
-        xcode_config.get("app_test_scheme", xcode_config.get("scheme", ""))
-        + ".xcscheme"
+    scheme_path = scheme_dir / (scheme_name + ".xcscheme")
+    testable_entry = (
+        f"         <TestableReference\n"
+        f'            skipped = "NO">\n'
+        f"            <BuildableReference\n"
+        f'               BuildableIdentifier = "primary"\n'
+        f"               BlueprintIdentifier = \"{uid['target']}\"\n"
+        f'               BuildableName = "{test_target}.xctest"\n'
+        f'               BlueprintName = "{test_target}"\n'
+        f"               ReferencedContainer = \"container:{project_rel.split('/')[-1]}\">\n"
+        f"            </BuildableReference>\n"
+        f"         </TestableReference>\n"
     )
-    scheme_path = scheme_dir / scheme_name
     if scheme_path.exists():
         scheme_xml = scheme_path.read_text()
-        if app_test_target not in scheme_xml:
-            testable_entry = (
-                f"         <TestableReference\n"
-                f'            skipped = "NO">\n'
-                f"            <BuildableReference\n"
-                f'               BuildableIdentifier = "primary"\n'
-                f"               BlueprintIdentifier = \"{uid['target']}\"\n"
-                f'               BuildableName = "{app_test_target}.xctest"\n'
-                f'               BlueprintName = "{app_test_target}"\n'
-                f"               ReferencedContainer = \"container:{project_rel.split('/')[-1]}\">\n"
-                f"            </BuildableReference>\n"
-                f"         </TestableReference>\n"
-            )
+        if test_target not in scheme_xml:
             if "      <Testables>\n      </Testables>" in scheme_xml:
                 scheme_xml = scheme_xml.replace(
                     "      <Testables>\n      </Testables>",
@@ -1002,9 +1011,74 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
                     f"{testable_entry}      </Testables>",
                 )
             scheme_path.write_text(scheme_xml)
+    else:
+        # No saved scheme file (some early commits lack xcshareddata).
+        # Create a minimal scheme so xcodebuild finds the injected test target
+        # in the TestAction and includes it in the generated xctestrun file.
+        scheme_dir.mkdir(parents=True, exist_ok=True)
+        proj_container = project_rel.split("/")[-1]
+        minimal_scheme = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<Scheme\n'
+            '   LastUpgradeVersion = "1620"\n'
+            '   version = "1.7">\n'
+            '   <BuildAction\n'
+            '      parallelizeBuildables = "YES"\n'
+            '      buildImplicitly = "YES">\n'
+            '      <BuildActionEntries>\n'
+            '         <BuildActionEntry\n'
+            '            buildForTesting = "YES"\n'
+            '            buildForRunning = "YES"\n'
+            '            buildForProfiling = "YES"\n'
+            '            buildForArchiving = "YES"\n'
+            '            buildForAnalyzing = "YES">\n'
+            '            <BuildableReference\n'
+            '               BuildableIdentifier = "primary"\n'
+            f'               BlueprintIdentifier = "{host_target_uuid}"\n'
+            f'               BuildableName = "{app_product_name}.app"\n'
+            f'               BlueprintName = "{scheme_name}"\n'
+            f'               ReferencedContainer = "container:{proj_container}">\n'
+            '            </BuildableReference>\n'
+            '         </BuildActionEntry>\n'
+            '      </BuildActionEntries>\n'
+            '   </BuildAction>\n'
+            '   <TestAction\n'
+            '      buildConfiguration = "Debug"\n'
+            '      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"\n'
+            '      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"\n'
+            '      shouldUseLaunchSchemeArgsEnv = "YES">\n'
+            '      <Testables>\n'
+            f'{testable_entry}'
+            '      </Testables>\n'
+            '   </TestAction>\n'
+            '   <LaunchAction\n'
+            '      buildConfiguration = "Debug"\n'
+            '      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"\n'
+            '      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"\n'
+            '      launchStyle = "0"\n'
+            '      useCustomWorkingDirectory = "NO"\n'
+            '      ignoresPersistentStateOnLaunch = "NO"\n'
+            '      debugDocumentVersioning = "YES"\n'
+            '      debugServiceExtension = "internal"\n'
+            '      allowLocationSimulation = "YES">\n'
+            '      <BuildableProductRunnable\n'
+            '         runnableDebuggingMode = "0">\n'
+            '         <BuildableReference\n'
+            '            BuildableIdentifier = "primary"\n'
+            f'            BlueprintIdentifier = "{host_target_uuid}"\n'
+            f'            BuildableName = "{app_product_name}.app"\n'
+            f'            BlueprintName = "{scheme_name}"\n'
+            f'            ReferencedContainer = "container:{proj_container}">\n'
+            '         </BuildableReference>\n'
+            '      </BuildableProductRunnable>\n'
+            '   </LaunchAction>\n'
+            '</Scheme>\n'
+        )
+        scheme_path.write_text(minimal_scheme)
+        logger.info("Created minimal scheme file at %s", scheme_path)
 
     # Create Info.plist and placeholder test file on disk
-    test_dir = work_dir / app_test_files_dest
+    test_dir = work_dir / files_dest
     test_dir.mkdir(parents=True, exist_ok=True)
 
     info_plist_path = test_dir / "Info.plist"
@@ -1025,36 +1099,81 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
             "</dict>\n</plist>\n"
         )
 
-    placeholder_path = test_dir / f"{app_test_target}Placeholder.swift"
+    placeholder_path = test_dir / f"{test_target}Placeholder.swift"
     if not placeholder_path.exists():
-        # Detect the actual Swift module name from the pbxproj's app product reference
-        # Falls back to app_test_module from config if detection fails.
-        module_name = xcode_config.get(
-            "app_test_module", xcode_config.get("scheme", "")
-        )
-        # Match the app product used by the host target, avoiding TV/watch extensions.
-        host_target_scheme = xcode_config.get(
-            "app_test_scheme", xcode_config.get("scheme", "")
-        )
-        host_m = re.search(
-            rf"productName\s*=\s*{re.escape(host_target_scheme)};.*?"
-            r"productReference\s*=\s*\w+ /\*\s*([^*]+?\.app)\s*\*/",
-            pbx,
-            re.DOTALL,
-        )
-        if host_m:
-            product_name = host_m.group(1).strip()[:-4]  # strip .app
-            detected = product_name.replace(" ", "_").replace("-", "_")
-            if detected:
-                module_name = detected
-        placeholder_path.write_text(
-            f"import XCTest\n@testable import {module_name}\n\n"
-            f"final class {app_test_target}Placeholder: XCTestCase {{\n"
-            f"    func testPlaceholder() {{ XCTAssertTrue(true) }}\n}}\n"
-        )
+        if is_ui_test:
+            # UI tests access the app through its public interface; @testable import is not allowed.
+            placeholder_path.write_text(
+                f"import XCTest\n\n"
+                f"final class {test_target}Placeholder: XCTestCase {{\n"
+                f"    func testPlaceholder() {{ XCTAssertTrue(true) }}\n}}\n"
+            )
+        else:
+            # Unit tests link against the app binary so @testable import works.
+            module_name = xcode_config.get(
+                "app_test_module", xcode_config.get("scheme", "")
+            )
+            host_m = re.search(
+                rf"productName\s*=\s*{re.escape(scheme_name)};.*?"
+                r"productReference\s*=\s*\w+ /\*\s*([^*]+?\.app)\s*\*/",
+                pbx,
+                re.DOTALL,
+            )
+            if host_m:
+                product_name = host_m.group(1).strip()[:-4]  # strip .app
+                detected = product_name.replace(" ", "_").replace("-", "_")
+                if detected:
+                    module_name = detected
+            placeholder_path.write_text(
+                f"import XCTest\n@testable import {module_name}\n\n"
+                f"final class {test_target}Placeholder: XCTestCase {{\n"
+                f"    func testPlaceholder() {{ XCTAssertTrue(true) }}\n}}\n"
+            )
 
-    logger.info("Injected %s target into %s", app_test_target, pbxproj_path)
+    logger.info(
+        "Injected %s target (%s) into %s", test_target, product_type, pbxproj_path
+    )
     return True
+
+
+def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
+    """Inject a unit-test target into the Xcode project.
+
+    Thin wrapper around :func:`_inject_test_target` using ``app_test_*`` config
+    keys and ``com.apple.product-type.bundle.unit-test``.
+    """
+    return _inject_test_target(
+        xcode_config,
+        work_dir,
+        test_target=xcode_config.get("app_test_target", ""),
+        files_dest=xcode_config.get("app_test_files_dest", ""),
+        project_rel=xcode_config.get("project", ""),
+        bundle_id=xcode_config.get("app_test_bundle_id", "com.anvil.tests"),
+        scheme_name=xcode_config.get("app_test_scheme", xcode_config.get("scheme", "")),
+        product_type="com.apple.product-type.bundle.unit-test",
+        is_ui_test=False,
+    )
+
+
+def inject_ui_test_target(xcode_config: dict, work_dir: Path) -> bool:
+    """Inject a UI-test target into the Xcode project.
+
+    Thin wrapper around :func:`_inject_test_target` using ``ui_test_*`` config
+    keys and ``com.apple.product-type.bundle.ui-testing``.  UI test bundles
+    launch the app externally and do not link against it, so ``BUNDLE_LOADER``
+    and ``TEST_HOST`` are omitted from the build settings.
+    """
+    return _inject_test_target(
+        xcode_config,
+        work_dir,
+        test_target=xcode_config.get("ui_test_target", ""),
+        files_dest=xcode_config.get("ui_test_files_dest", ""),
+        project_rel=xcode_config.get("project", ""),
+        bundle_id=xcode_config.get("ui_test_bundle_id", "com.anvil.uitests"),
+        scheme_name=xcode_config.get("ui_test_scheme", xcode_config.get("scheme", "")),
+        product_type="com.apple.product-type.bundle.ui-testing",
+        is_ui_test=True,
+    )
 
 
 def _build_xcodebuild_app_test_cmd(
@@ -1098,6 +1217,10 @@ def _build_xcodebuild_app_test_cmd(
     )
     if not allow_pkg_resolution:
         cmd.append("-disableAutomaticPackageResolution")
+
+    app_test_target = xcode_config.get("app_test_target", "")
+    if app_test_target:
+        cmd.extend(["-only-testing", app_test_target])
 
     cmd.extend(xcode_config.get("extra_build_flags", []))
 

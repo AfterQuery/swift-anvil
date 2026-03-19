@@ -7,6 +7,7 @@ on Modal sandboxes with parallel execution support.
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import typer
@@ -77,8 +78,15 @@ def run_dataset_batch(
         else ensure_dir(eval_dir(dataset_id=dataset_id, eval_id=eval_id))
     )
 
-    # Get provider env var
+    # Get provider env var and verify it is set before launching any jobs
     provider_env_var = provider_env_var_from_model(model)
+    env_var_name = provider_env_var.lstrip("$")
+    if not os.environ.get(env_var_name):
+        typer.echo(
+            f"Error: {provider_env_var} is not set. "
+            err=True,
+        )
+        raise typer.Exit(1)
 
     # Progress callback
     def on_progress(instance_id: str, status: str) -> None:

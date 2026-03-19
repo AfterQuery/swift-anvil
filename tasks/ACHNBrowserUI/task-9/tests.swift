@@ -9,6 +9,7 @@ final class AnvilTask9F2PTests: XCTestCase {
     override func setUp() {
         super.setUp()
         collection = UserCollection(iCloudDisabled: true)
+        collection.visitedResidents = []
     }
 
     // MARK: - Helpers

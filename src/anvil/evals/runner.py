@@ -33,6 +33,11 @@ from .pass_at_k import (
 )
 
 
+def _fmt_s(seconds: float) -> str:
+    """Format a duration as ``'42s (0.7m)'``."""
+    return f"{seconds:.0f}s ({seconds / 60:.1f}m)"
+
+
 def _eval_id(agent: str, model: str) -> str:
     """Compose eval_id as '<agent>_<model-suffix>'."""
     # Oracle agent doesn't use a model
@@ -239,9 +244,12 @@ def run_evaluation(
         bad_eval_moved = _cleanup_bad_evals(base_out, instances, k)
         completed_evals = _get_completed_evals(base_out, instances, k)
 
+        instance_ids = {inst["instance_id"] for inst in instances}
         all_patches = []
         for p in gold_patches:
             iid = p["instance_id"]
+            if iid not in instance_ids:
+                continue
             if (iid, 1) not in completed_evals:
                 all_patches.append({
                     "instance_id": iid,
@@ -331,7 +339,10 @@ def run_evaluation(
                 pbar.close()
 
             typer.echo(f"Running agents (max {max_parallel} parallel)...")
+            agent_start = time.time()
             asyncio.run(run_all_agents())
+            agent_elapsed = time.time() - agent_start
+            typer.echo(f"Agent runs complete in {_fmt_s(agent_elapsed)}")
 
         if rollout_only:
             typer.echo("Rollout-only mode: skipping evaluation phase.")
@@ -380,6 +391,7 @@ def run_evaluation(
         if eval_backend == "xcode":
             from .xcode_eval import run_xcode_evals
 
+            eval_start = time.time()
             run_xcode_evals(
                 patches=all_patches,
                 instances=instances,
@@ -389,6 +401,8 @@ def run_evaluation(
                 compile_only=compile_only,
                 dataset_id=dataset_id,
             )
+            eval_elapsed = time.time() - eval_start
+            typer.echo(f"Xcode evals complete in {_fmt_s(eval_elapsed)}")
         else:
             patches_file = base_out / f"{eval_id}_all_patches.json"
             patches_file.write_text(json.dumps(all_patches, indent=2))
@@ -450,8 +464,11 @@ def run_evaluation(
         )
         typer.echo(f"  Attempt {attempt}: {passed}/{n_tasks} passed")
 
+    total_elapsed = time.time() - start_time
+    typer.echo(f"Total time: {_fmt_s(total_elapsed)}")
+
     summary = compute_pass_at_k_summary(
-        eval_results, model, dataset_id, agent, k, time.time() - start_time
+        eval_results, model, dataset_id, agent, k, total_elapsed
     )
     print_pass_at_k_summary(summary)
     save_pass_at_k_json(summary, base_out / "eval_results_pass_at_k.json")

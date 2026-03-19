@@ -102,7 +102,7 @@ anvil convert-dataset --dataset tasks/ACHNBrowserUI
 # Step 2: Warm Xcode build cache (~5 min per unique base commit)
 anvil warm-xcode-cache --dataset datasets/ACHNBrowserUI
 
-# Step 3: Validate task tests fail on unpatched base commits
+# Step 3: Validate task tests fail on unpatched base commits (optional)
 anvil validate-tests --dataset datasets/ACHNBrowserUI
 
 # Step 4: Verify gold patches compile and pass unit tests
