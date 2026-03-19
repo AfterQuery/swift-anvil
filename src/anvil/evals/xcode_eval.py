@@ -39,7 +39,6 @@ from .constants import (
     TEST_NAME_COMPILATION,
     TEST_NAME_EVAL_INFRASTRUCTURE,
     TEST_NAME_PATCH_APPLY,
-    TEST_NAME_PATCH_CONTENT,
     TEST_NAME_PBXPROJ_VALIDATION,
     TEST_NAME_UNIT_TEST_SETUP,
     TEST_NAME_XCTEST_RUN,
@@ -48,6 +47,11 @@ from .constants import (
     TEST_TYPE_SPM,
     TEST_TYPE_UI,
     UI_TO_APP_CONFIG_KEYS,
+)
+from .eval_output import (
+    failed_test_result,
+    make_empty_patch_result,
+    save_eval_output,
 )
 from .simulator_pool import SimulatorPool
 from .test_file_copier import TestFileCopier
@@ -111,7 +115,7 @@ def _run_xcodebuild_tests(
     test_result = _run_xcodebuild(test_cmd, str(test_cwd), timeout)
     output = parse_xcodebuild_output(test_result.stdout, test_result.stderr)
     if test_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
-        output = _failed_test_result(
+        output = failed_test_result(
             TEST_NAME_XCTEST_RUN, "xcodebuild test exited with non-zero"
         )
     output["_stdout"] = test_result.stdout
@@ -174,7 +178,7 @@ def _run_app_tests(
     if build_result.returncode != 0:
         output = parse_xcodebuild_output(build_result.stdout, build_result.stderr)
         if not output[OUTPUT_KEY_TESTS]:
-            output = _failed_test_result(
+            output = failed_test_result(
                 TEST_NAME_XCTEST_RUN, "xcodebuild build-for-testing failed"
             )
         output["_stdout"] = build_result.stdout
@@ -229,7 +233,7 @@ def _run_app_tests(
 
     output = parse_xcodebuild_output(test_result.stdout, test_result.stderr)
     if test_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
-        output = _failed_test_result(
+        output = failed_test_result(
             TEST_NAME_XCTEST_RUN, "xcodebuild test exited with non-zero"
         )
     output["_stdout"] = build_result.stdout + "\n" + test_result.stdout
@@ -373,7 +377,7 @@ def eval_single_patch(
                 if fallback.returncode != 0:
                     err_detail = fallback.stderr[:200] or fallback.stdout[:200]
                     logger.warning("Patch apply failed for %s: %s", tag, err_detail)
-                    return _failed_test_result(TEST_NAME_PATCH_APPLY, err_detail)
+                    return failed_test_result(TEST_NAME_PATCH_APPLY, err_detail)
 
         project_rel = xcode_config.get("project", "")
         if project_rel and "project.pbxproj" in patch:
@@ -382,8 +386,8 @@ def eval_single_patch(
                 logger.warning(
                     "pbxproj validation failed for %s: %s", tag, pbxproj_error
                 )
-                result = _failed_test_result(TEST_NAME_PBXPROJ_VALIDATION, pbxproj_error[:500])
-                _save_eval_output(
+                result = failed_test_result(TEST_NAME_PBXPROJ_VALIDATION, pbxproj_error[:500])
+                save_eval_output(
                     output_dir,
                     instance_id,
                     attempt,
@@ -432,7 +436,7 @@ def eval_single_patch(
             all_stderr = build_result.stderr
 
             if build_result.returncode != 0:
-                _save_eval_output(
+                save_eval_output(
                     output_dir,
                     instance_id,
                     attempt,
@@ -476,7 +480,7 @@ def eval_single_patch(
                 all_stderr += "\n" + xctest_output.pop("_stderr", "")
 
             if xctest_output is None and has_task_tests:
-                xctest_output = _failed_test_result(
+                xctest_output = failed_test_result(
                     TEST_NAME_UNIT_TEST_SETUP,
                     "Task tests found but test config not configured in xcode_config.yaml",
                 )
@@ -497,7 +501,7 @@ def eval_single_patch(
         else:
             combined = build_output
 
-        _save_eval_output(
+        save_eval_output(
             output_dir,
             instance_id,
             attempt,
@@ -512,17 +516,17 @@ def eval_single_patch(
     except subprocess.TimeoutExpired as te:
         timeout_s = te.timeout if te.timeout else "?"
         logger.error("Build/test timed out for %s after %ss", tag, timeout_s)
-        result = _failed_test_result(TEST_NAME_COMPILATION, f"Build timed out ({timeout_s}s)")
-        _save_eval_output(
+        result = failed_test_result(TEST_NAME_COMPILATION, f"Build timed out ({timeout_s}s)")
+        save_eval_output(
             output_dir, instance_id, attempt, eval_id, result, patch, "", ""
         )
         return result
     except Exception as e:
         logger.error("Error evaluating %s: %s", tag, e, exc_info=True)
         error_msg = f"{type(e).__name__}: {e}"
-        result = _failed_test_result(TEST_NAME_EVAL_INFRASTRUCTURE, error_msg[:500])
+        result = failed_test_result(TEST_NAME_EVAL_INFRASTRUCTURE, error_msg[:500])
         try:
-            _save_eval_output(
+            save_eval_output(
                 output_dir,
                 instance_id,
                 attempt,
@@ -541,47 +545,6 @@ def eval_single_patch(
                 cache.cleanup(repo_name, worktree_dir)
             except Exception:
                 pass
-
-
-def _save_eval_output(
-    output_dir: Path,
-    instance_id: str,
-    attempt: int | None,
-    eval_id: str,
-    output: dict,
-    patch: str,
-    stdout: str,
-    stderr: str,
-) -> None:
-    """Save eval outputs in the same directory structure as the Modal eval."""
-    if attempt is not None:
-        eval_dir = output_dir / instance_id / f"attempt_{attempt}" / "eval_results"
-    else:
-        eval_dir = output_dir / instance_id / "eval_results"
-
-    eval_dir.mkdir(parents=True, exist_ok=True)
-
-    prefix = eval_id
-    (eval_dir / f"{prefix}_output.json").write_text(json.dumps(output, indent=2))
-    (eval_dir / f"{prefix}_patch.diff").write_text(patch or "")
-    (eval_dir / f"{prefix}_stdout.log").write_text(stdout or "")
-    if stderr:
-        (eval_dir / f"{prefix}_stderr.log").write_text(stderr)
-
-
-def _failed_test_result(name: str, message: str) -> dict:
-    """Return a synthetic FAILED test result dict."""
-    return {OUTPUT_KEY_TESTS: [{"name": name, "status": TEST_STATUS_FAILED, "message": message}]}
-
-
-def _make_empty_patch_result(has_tests: bool) -> dict:
-    """Return a synthetic FAILED result for an empty/blank patch."""
-    msg = (
-        "Empty patch — skipped build (tests would fail on unpatched base)"
-        if has_tests
-        else "Empty patch — nothing to evaluate"
-    )
-    return _failed_test_result(TEST_NAME_PATCH_CONTENT, msg)
 
 
 def run_xcode_evals(
@@ -637,8 +600,8 @@ def run_xcode_evals(
             result_key = f"{iid}:attempt_{attempt}" if attempt else iid
             eval_results[result_key] = False
             has_tests = _has_tests(iid)
-            output = _make_empty_patch_result(has_tests)
-            _save_eval_output(output_dir, iid, attempt, eval_id, output, "", "", "")
+            output = make_empty_patch_result(has_tests)
+            save_eval_output(output_dir, iid, attempt, eval_id, output, "", "", "")
             if attempt is not None:
                 task_results_dir = (
                     output_dir / iid / f"attempt_{attempt}" / "eval_results"
@@ -747,7 +710,7 @@ def run_xcode_evals(
                     output = future.result()
                 except Exception as e:
                     logger.error("Eval failed for %s: %s", result_key, e)
-                    output = _failed_test_result(
+                    output = failed_test_result(
                         TEST_NAME_EVAL_INFRASTRUCTURE,
                         f"Worker error: {type(e).__name__}: {e}"[:500],
                     )
