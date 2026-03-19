@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import subprocess
 import tempfile
 import threading
@@ -58,7 +57,7 @@ from .eval_output import (
     make_empty_patch_result,
     save_eval_output,
 )
-from .simulator_pool import SimulatorPool
+from .simulator_pool import SimulatorPool, prewarm_app_binary
 from .test_file_copier import TestFileCopier
 
 logger = logging.getLogger(__name__)
@@ -163,7 +162,7 @@ def _run_app_tests(
 
     if is_ui_test:
         products_dir = app_test_dd / "Build" / "Products"
-        _prewarm_app_binary(xcode_config, products_dir)
+        prewarm_app_binary(xcode_config, products_dir)
         xctestrun_files = (
             sorted(products_dir.glob("*.xctestrun")) if products_dir.exists() else []
         )
@@ -213,83 +212,6 @@ def _run_app_tests(
     output["_stdout"] = build_result.stdout + "\n" + test_result.stdout
     output["_stderr"] = build_result.stderr + "\n" + test_result.stderr
     return output
-
-
-def _booted_udid_for_name(device_name: str) -> str | None:
-    """Return the UDID of a booted simulator matching *device_name*, or None."""
-    result = subprocess.run(
-        ["xcrun", "simctl", "list", "devices", "booted", "--json"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    if result.returncode != 0:
-        return None
-    try:
-        devices = json.loads(result.stdout).get("devices", {})
-        for runtime_devices in devices.values():
-            for dev in runtime_devices:
-                if dev.get("name") == device_name and dev.get("state") == "Booted":
-                    return dev["udid"]
-    except Exception:
-        pass
-    return None
-
-
-def _prewarm_app_binary(xcode_config: dict, products_dir: Path) -> None:
-    """Launch and terminate the app to warm the binary page cache on the simulator."""
-    dest = xcode_config.get(
-        "app_test_destination", xcode_config.get("test_destination", "")
-    )
-    m = re.search(r"\bid=([A-F0-9-]{36})\b", dest, re.IGNORECASE)
-    if m:
-        sim_udid = m.group(1)
-    else:
-        sim_udid = _booted_udid_for_name(SimulatorPool._parse_device_name(dest))
-        if not sim_udid:
-            return
-
-    app_bundle_name = xcode_config.get("app_bundle_name") or xcode_config.get(
-        "scheme", ""
-    )
-    app_bundle: Path | None = None
-    if app_bundle_name and products_dir.exists():
-        candidates = list(products_dir.glob(f"**/{app_bundle_name}.app"))
-        if candidates:
-            app_bundle = candidates[0]
-
-    if not app_bundle or not app_bundle.exists():
-        logger.debug("Pre-warm skipped: app bundle not found in %s", products_dir)
-        return
-
-    info_plist = app_bundle / "Info.plist"
-    if not info_plist.exists():
-        return
-
-    result = subprocess.run(
-        ["/usr/libexec/PlistBuddy", "-c", "Print CFBundleIdentifier", str(info_plist)],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    bundle_id = result.stdout.strip()
-    if not bundle_id:
-        return
-
-    logger.info("Pre-warming app %s on simulator %s", bundle_id, sim_udid)
-    subprocess.run(
-        ["xcrun", "simctl", "launch", sim_udid, bundle_id],
-        capture_output=True,
-        text=True,
-        timeout=20,
-    )
-    time.sleep(2)
-    subprocess.run(
-        ["xcrun", "simctl", "terminate", sim_udid, bundle_id],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
 
 
 def _run_ui_tests(xcode_config: dict, worktree_dir: Path) -> dict | None:
