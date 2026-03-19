@@ -66,6 +66,32 @@ logger = logging.getLogger(__name__)
 _tls = threading.local()
 
 
+def _get_patch_text(ps: dict) -> str:
+    """Extract patch text from a patch sample dict (patch or model_patch key)."""
+    return ps.get("patch", ps.get("model_patch", ""))
+
+
+def _result_key(iid: str, attempt: int | None) -> str:
+    """Format result key for eval_results dict (e.g. 'task-1:attempt_2' or 'task-1')."""
+    return f"{iid}:attempt_{attempt}" if attempt else iid
+
+
+def _eval_results_dir(output_dir: Path, iid: str, attempt: int | None) -> Path:
+    """Path to eval_results dir for an instance/attempt."""
+    if attempt is not None:
+        return output_dir / iid / f"attempt_{attempt}" / "eval_results"
+    return output_dir / iid / "eval_results"
+
+
+def _write_eval_result_json(
+    output_dir: Path, iid: str, attempt: int | None, passed: bool
+) -> None:
+    """Write eval_results.json with {iid: passed} in the eval_results dir."""
+    task_results_dir = _eval_results_dir(output_dir, iid, attempt)
+    task_results_dir.mkdir(parents=True, exist_ok=True)
+    (task_results_dir / "eval_results.json").write_text(json.dumps({iid: passed}))
+
+
 def _as_ui_test_config(xcode_config: dict) -> dict:
     """Map ui_test_* keys → app_test_* so run/cache functions work for UI tests."""
     overrides: dict = {}
@@ -488,22 +514,16 @@ def run_xcode_evals(
 
     for ps in patches:
         iid = ps["instance_id"]
-        patch_text = ps.get("patch", ps.get("model_patch", ""))
+        patch_text = _get_patch_text(ps)
         if not patch_text or not patch_text.strip():
             attempt = ps.get("attempt")
-            result_key = f"{iid}:attempt_{attempt}" if attempt else iid
+            result_key = _result_key(iid, attempt)
             eval_results[result_key] = False
             has_tests = _has_tests(iid)
             output = make_empty_patch_result(has_tests)
             save_eval_output(output_dir, iid, attempt, eval_id, output, "", "", "")
             if attempt is not None:
-                task_results_dir = (
-                    output_dir / iid / f"attempt_{attempt}" / "eval_results"
-                )
-                task_results_dir.mkdir(parents=True, exist_ok=True)
-                (task_results_dir / "eval_results.json").write_text(
-                    json.dumps({iid: False})
-                )
+                _write_eval_result_json(output_dir, iid, attempt, False)
             skipped += 1
             continue
 
@@ -563,7 +583,7 @@ def run_xcode_evals(
                 _tls.worker_index = idx
             t0 = time.time()
             result = eval_single_patch(
-                patch=patch_sample.get("patch", patch_sample.get("model_patch", "")),
+                patch=_get_patch_text(patch_sample),
                 instance_id=patch_sample["instance_id"],
                 base_commit=instance_map[patch_sample["instance_id"]]["base_commit"],
                 repo_name=instance_map[patch_sample["instance_id"]]["repo_name"],
@@ -597,7 +617,7 @@ def run_xcode_evals(
                 patch_sample = future_to_patch[future]
                 iid = patch_sample["instance_id"]
                 attempt = patch_sample.get("attempt")
-                result_key = f"{iid}:attempt_{attempt}" if attempt else iid
+                result_key = _result_key(iid, attempt)
 
                 worker_crashed = False
                 try:
@@ -617,41 +637,30 @@ def run_xcode_evals(
                 if passed_this:
                     passed_count += 1
 
-                patch_text = patch_sample.get(
-                    "patch", patch_sample.get("model_patch", "")
-                )
+                patch_text = _get_patch_text(patch_sample)
                 dup_key = (iid, hash(patch_text))
                 for sibling in dedup_map.get(dup_key, [])[1:]:
                     sib_attempt = sibling.get("attempt")
-                    sib_key = f"{iid}:attempt_{sib_attempt}" if sib_attempt else iid
+                    sib_key = _result_key(iid, sib_attempt)
                     eval_results[sib_key] = passed_this
                     if passed_this:
                         passed_count += 1
                     if sib_attempt is not None:
-                        sib_dir = (
-                            output_dir / iid / f"attempt_{sib_attempt}" / "eval_results"
-                        )
-                        sib_dir.mkdir(parents=True, exist_ok=True)
-                        (sib_dir / "eval_results.json").write_text(
-                            json.dumps({iid: passed_this})
-                        )
+                        _write_eval_result_json(output_dir, iid, sib_attempt, passed_this)
 
                 if attempt is not None:
-                    task_results_dir = (
-                        output_dir / iid / f"attempt_{attempt}" / "eval_results"
-                    )
-                    task_results_dir.mkdir(parents=True, exist_ok=True)
-                    (task_results_dir / "eval_results.json").write_text(
-                        json.dumps({iid: eval_results[result_key]})
+                    _write_eval_result_json(
+                        output_dir, iid, attempt, eval_results[result_key]
                     )
                     if worker_crashed:
-                        (task_results_dir / f"{eval_id}_output.json").write_text(
+                        task_dir = _eval_results_dir(output_dir, iid, attempt)
+                        (task_dir / f"{eval_id}_output.json").write_text(
                             json.dumps(output, indent=2)
                         )
 
                 passed = passed_count
                 total = len(eval_results)
-                tag = f"{iid}:{attempt}" if attempt else iid
+                tag = _result_key(iid, attempt)
                 status = "pass" if eval_results.get(result_key) else "fail"
                 pbar.set_postfix_str(f"{passed}/{total} passed, {tag} {status}")
     finally:
