@@ -17,11 +17,6 @@ import typer
 from ruamel.yaml import YAML
 from tqdm import tqdm
 
-try:
-    from pbxproj import XcodeProject
-except ImportError:
-    XcodeProject = None
-
 from ..config import repo_root, source_tasks_dir
 from .xcode_cache import (
     XcodeBuildCache,
@@ -29,10 +24,7 @@ from .xcode_cache import (
     _build_xcodebuild_app_test_cmd,
     _build_xcodebuild_cmd,
     _build_xcodebuild_test_cmd,
-    _pbx_uuid,
     _run_xcodebuild,
-    inject_app_test_target,
-    inject_ui_test_target,
     load_xcode_config,
     resolve_test_package_path,
 )
@@ -41,13 +33,31 @@ from .xcode_parser import (
     parse_build_result,
     parse_xcodebuild_output,
 )
+from .constants import (
+    OUTPUT_KEY_TESTS,
+    SYNTHETIC_TEST_NAMES,
+    TEST_NAME_COMPILATION,
+    TEST_NAME_EVAL_INFRASTRUCTURE,
+    TEST_NAME_PATCH_APPLY,
+    TEST_NAME_PATCH_CONTENT,
+    TEST_NAME_PBXPROJ_VALIDATION,
+    TEST_NAME_UNIT_TEST_SETUP,
+    TEST_NAME_XCTEST_RUN,
+    TEST_STATUS_FAILED,
+    TEST_STATUS_PASSED,
+    TEST_TYPE_APP,
+    TEST_TYPE_SPM,
+    TEST_TYPE_UI,
+)
+from .simulator_pool import SimulatorPool
+from .test_file_copier import TestFileCopier
 
 logger = logging.getLogger(__name__)
 
 
 def _task_name(instance_id: str) -> str:
     """Extract the task name from a dotted instance ID (e.g. ``"Repo.task-4"`` → ``"task-4"``)."""
-    return instance_id.split(".")[-1]
+    return TestFileCopier._task_name(instance_id)
 
 
 # Per-worker simulator UDID (thread-local for ThreadPoolExecutor).
@@ -89,455 +99,6 @@ def _gate_build_start() -> None:
         _last_build_start = time.monotonic()
 
 
-def _parse_device_name(test_destination: str) -> str:
-    """Extract the device name from a destination string."""
-    match = re.search(r"name=([^,]+)", test_destination)
-    return match.group(1).strip() if match else "iPhone 16"
-
-
-def _create_simulator_pool(n: int, test_destination: str) -> list[str]:
-    """Create n iOS Simulator clones for parallel test execution. Returns UDIDs."""
-    device_name = _parse_device_name(test_destination)
-    created = 0
-    created_lock = threading.Lock()
-
-    def _create_one(i: int) -> str:
-        nonlocal created
-        sim_name = f"anvil-eval-{i}"
-        subprocess.run(
-            ["xcrun", "simctl", "delete", sim_name],
-            capture_output=True,
-            text=True,
-        )
-        result = subprocess.run(
-            ["xcrun", "simctl", "create", sim_name, device_name],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"xcrun simctl create failed for '{sim_name}': {result.stderr.strip()}"
-            )
-        udid = result.stdout.strip()
-
-        subprocess.run(
-            ["xcrun", "simctl", "boot", udid],
-            capture_output=True,
-            text=True,
-        )
-        subprocess.run(
-            ["xcrun", "simctl", "bootstatus", udid, "-b"],
-            capture_output=True,
-            text=True,
-        )
-        with created_lock:
-            created += 1
-            logger.info(
-                "Created & booted simulator %s (%s) [%d/%d]",
-                sim_name,
-                udid,
-                created,
-                n,
-            )
-        return udid
-
-    with ThreadPoolExecutor(max_workers=n) as pool:
-        udids = list(pool.map(_create_one, range(n)))
-    return udids
-
-
-def _destroy_simulator_pool(udids: list[str]) -> None:
-    """Delete simulators created by :func:`_create_simulator_pool`."""
-    total = len(udids)
-    destroyed = 0
-    destroyed_lock = threading.Lock()
-
-    def _delete_one(udid: str) -> None:
-        nonlocal destroyed
-        subprocess.run(
-            ["xcrun", "simctl", "shutdown", udid], capture_output=True, text=True
-        )
-        subprocess.run(
-            ["xcrun", "simctl", "delete", udid], capture_output=True, text=True
-        )
-        with destroyed_lock:
-            destroyed += 1
-            logger.info("Destroyed simulator %s (%d/%d)", udid, destroyed, total)
-
-    with ThreadPoolExecutor(max_workers=total) as pool:
-        list(pool.map(_delete_one, udids))
-
-
-def _detect_test_type(tests_file: Path, xcode_config: dict) -> str:
-    """Return "ui", "app", or "spm" based on the test file's imports."""
-    try:
-        head = tests_file.read_text()[:500]
-    except OSError:
-        return "spm"
-
-    if xcode_config.get("ui_test_target") and "XCUIApplication" in head:
-        return "ui"
-
-    app_modules = set()
-    for key in ("app_test_module", "app_test_scheme"):
-        val = xcode_config.get(key, "")
-        if val:
-            app_modules.add(val)
-    if not app_modules:
-        return "spm"
-
-    for line in head.splitlines()[:10]:
-        stripped = line.strip()
-        if stripped.startswith("@testable import"):
-            for mod in app_modules:
-                if mod in stripped:
-                    return "app"
-    return "spm"
-
-
-def _copy_task_tests(
-    instance_id: str,
-    source_tasks_dir: Path | None,
-    xcode_config: dict,
-    worktree_dir: Path,
-) -> str:
-    """Copy tests.swift into the correct target. Returns "ui"/"app"/"spm" or ""."""
-    if not source_tasks_dir:
-        return ""
-
-    tests_file = source_tasks_dir / _task_name(instance_id) / "tests.swift"
-
-    if not tests_file.is_file():
-        return ""
-
-    test_type = _detect_test_type(tests_file, xcode_config)
-
-    if test_type == "ui":
-        return _copy_ui_tests(instance_id, tests_file, xcode_config, worktree_dir)
-    elif test_type == "app":
-        return _copy_app_tests(instance_id, tests_file, xcode_config, worktree_dir)
-    else:
-        return _copy_spm_tests(instance_id, tests_file, xcode_config, worktree_dir)
-
-
-def _copy_task_uitests(
-    instance_id: str,
-    source_tasks_dir: Path | None,
-    xcode_config: dict,
-    worktree_dir: Path,
-) -> bool:
-    """Copy uitests.swift into the UI test target. Returns True if copied."""
-    if not source_tasks_dir:
-        return False
-
-    uitests_file = source_tasks_dir / _task_name(instance_id) / "uitests.swift"
-
-    if not uitests_file.is_file():
-        return False
-
-    result = _copy_ui_tests(instance_id, uitests_file, xcode_config, worktree_dir)
-    return result == "ui"
-
-
-def _validate_pbxproj(worktree_dir: Path, project_rel: str) -> str | None:
-    """Validate project.pbxproj after patch application. Returns error string or None."""
-    pbxproj_path = worktree_dir / project_rel / "project.pbxproj"
-    if not pbxproj_path.exists():
-        return None
-
-    if XcodeProject is not None:
-        try:
-            XcodeProject.load(str(pbxproj_path))
-            return None
-        except Exception as exc:
-            return f"project.pbxproj parse error (pbxproj): {exc}"
-
-    try:
-        result = subprocess.run(
-            ["plutil", "-lint", str(pbxproj_path)],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout).strip()
-            return f"project.pbxproj plist validation failed: {detail}"
-    except FileNotFoundError:
-        pass
-    except Exception as exc:
-        logger.debug("plutil validation skipped: %s", exc)
-
-    return None
-
-
-def _add_file_to_pbxproj(
-    worktree_dir: Path,
-    project_rel: str,
-    file_path: Path,
-    target_name: str,
-) -> None:
-    """Add a Swift source file to a pbxproj target's compile sources via string manipulation."""
-    pbxproj_path = worktree_dir / project_rel / "project.pbxproj"
-    if not pbxproj_path.exists():
-        return
-
-    file_name = file_path.name
-    pbx = pbxproj_path.read_text()
-
-    if file_name in pbx:
-        logger.debug("File %s already in pbxproj, skipping", file_name)
-        return
-
-    file_ref_uuid = _pbx_uuid(f"{target_name}-{file_name}-fileref")
-    build_uuid = _pbx_uuid(f"{target_name}-{file_name}-buildfile")
-
-    pbx = pbx.replace(
-        "/* End PBXBuildFile section */",
-        f"\t\t{build_uuid} /* {file_name} in Sources */ = "
-        f"{{isa = PBXBuildFile; fileRef = {file_ref_uuid} /* {file_name} */; }};\n"
-        "/* End PBXBuildFile section */",
-    )
-    pbx = pbx.replace(
-        "/* End PBXFileReference section */",
-        f"\t\t{file_ref_uuid} /* {file_name} */ = {{isa = PBXFileReference; "
-        f"lastKnownFileType = sourcecode.swift; path = {file_name}; "
-        f'sourceTree = "<group>"; }};\n'
-        "/* End PBXFileReference section */",
-    )
-
-    if m := re.search(
-        rf"\w{{24}} /\* {re.escape(target_name)} \*/ = \{{\s*isa = PBXGroup;"
-        rf".*?children = \((.*?)\);",
-        pbx,
-        re.DOTALL,
-    ):
-        pos = m.start(1) + len(m.group(1))
-        pbx = pbx[:pos] + f"\n\t\t\t\t{file_ref_uuid} /* {file_name} */," + pbx[pos:]
-
-    if (
-        (
-            m_target := re.search(
-                rf"\w{{24}} /\* {re.escape(target_name)} \*/ = \{{\s*isa = PBXNativeTarget;"
-                rf".*?buildPhases = \(([^)]*)\)",
-                pbx,
-                re.DOTALL,
-            )
-        )
-        and (m_src := re.search(r"(\w{24}) /\* Sources \*/", m_target.group(1)))
-        and (
-            m_phase := re.search(
-                rf"{re.escape(m_src.group(1))} /\* Sources \*/ = \{{.*?files = \(([^)]*)\)",
-                pbx,
-                re.DOTALL,
-            )
-        )
-    ):
-        pos = m_phase.start(1) + len(m_phase.group(1))
-        pbx = (
-            pbx[:pos]
-            + f"\n\t\t\t\t{build_uuid} /* {file_name} in Sources */,"
-            + pbx[pos:]
-        )
-
-    pbxproj_path.write_text(pbx)
-    logger.info("Added %s to target %s in pbxproj", file_name, target_name)
-
-
-def _propagate_pods_framework_paths(
-    worktree_dir: Path,
-    xcode_config: dict,
-    test_target: str,
-) -> None:
-    """Copy CocoaPods FRAMEWORK_SEARCH_PATHS from the main target to the test target."""
-    scheme = xcode_config.get("scheme", "")
-    project_rel = xcode_config.get("project", "")
-    if not scheme or not project_rel:
-        return
-
-    pods_xcconfig = (
-        worktree_dir
-        / "Pods"
-        / "Target Support Files"
-        / f"Pods-{scheme}"
-        / f"Pods-{scheme}.debug.xcconfig"
-    )
-    if not pods_xcconfig.exists():
-        return
-
-    try:
-        xcconfig_text = pods_xcconfig.read_text()
-    except OSError:
-        return
-
-    pod_dirs = re.findall(r'PODS_CONFIGURATION_BUILD_DIR\}/([^\s"]+)', xcconfig_text)
-    if not pod_dirs:
-        return
-
-    pbxproj_path = worktree_dir / project_rel / "project.pbxproj"
-    if not pbxproj_path.exists():
-        return
-
-    try:
-        pbx = pbxproj_path.read_text()
-    except OSError:
-        return
-
-    extra_paths = "".join(f'\n\t\t\t\t\t"$(BUILT_PRODUCTS_DIR)/{d}",' for d in pod_dirs)
-
-    target_match = re.search(
-        rf"(/\* {re.escape(test_target)} \*/ = \{{.*?buildConfigurationList = )(\w{{24}})",
-        pbx,
-        re.DOTALL,
-    )
-    if not target_match:
-        return
-
-    config_list_uuid = target_match.group(2)
-    config_list_match = re.search(
-        rf"{config_list_uuid}.*?buildConfigurations = \((.*?)\)",
-        pbx,
-        re.DOTALL,
-    )
-    if not config_list_match:
-        return
-
-    config_uuids = re.findall(r"(\w{24})", config_list_match.group(1))
-
-    modified = False
-    for uuid in config_uuids:
-        # Find the FRAMEWORK_SEARCH_PATHS in this config block
-        pattern = (
-            rf"({uuid}\s*/\*.*?\*/\s*=\s*\{{.*?"
-            r"FRAMEWORK_SEARCH_PATHS\s*=\s*\()(.*?\);)"
-        )
-        m = re.search(pattern, pbx, re.DOTALL)
-        if m:
-            pbx = pbx[: m.start(2)] + extra_paths + m.group(2) + pbx[m.end(2) :]
-            modified = True
-        else:
-            cfg_pattern = (
-                rf"({uuid}\s*/\*.*?\*/\s*=\s*\{{[^{{}}]*?buildSettings\s*=\s*\{{)"
-            )
-            cm = re.search(cfg_pattern, pbx, re.DOTALL)
-            if cm:
-                insert = (
-                    f"\n\t\t\t\tFRAMEWORK_SEARCH_PATHS = ("
-                    f'\n\t\t\t\t\t"$(inherited)",'
-                    f"{extra_paths}"
-                    f"\n\t\t\t\t);"
-                )
-                pbx = pbx[: cm.end()] + insert + pbx[cm.end() :]
-                modified = True
-
-    if modified:
-        pbxproj_path.write_text(pbx)
-        logger.info(
-            "Propagated %d Pods framework paths to %s", len(pod_dirs), test_target
-        )
-
-
-def _copy_spm_tests(
-    instance_id: str,
-    tests_file: Path,
-    xcode_config: dict,
-    worktree_dir: Path,
-) -> str:
-    """Copy tests into the SPM test target (existing Backend path)."""
-    test_files_dest = xcode_config.get("test_files_dest", "")
-    if not test_files_dest:
-        return ""
-
-    resolved_pkg = resolve_test_package_path(xcode_config, worktree_dir)
-    has_pkg_config = bool(xcode_config.get("test_package_path"))
-
-    if has_pkg_config and not resolved_pkg:
-        logger.warning(
-            "No test_package_path candidate found at worktree — skipping test copy for %s",
-            instance_id,
-        )
-        return ""
-
-    if resolved_pkg:
-        dest_dir = worktree_dir / resolved_pkg / test_files_dest
-    else:
-        dest_dir = worktree_dir / test_files_dest
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    dst = dest_dir / tests_file.name
-    shutil.copy2(str(tests_file), str(dst))
-    logger.info("Copied test file %s → %s (spm)", tests_file.name, dest_dir)
-
-    test_target = xcode_config.get("test_target", "")
-    project_rel = xcode_config.get("project", "")
-    if test_target and not xcode_config.get("test_package_path") and project_rel:
-        _add_file_to_pbxproj(worktree_dir, project_rel, dst, test_target)
-        _propagate_pods_framework_paths(worktree_dir, xcode_config, test_target)
-
-    return "spm"
-
-
-def _copy_app_tests(
-    instance_id: str,
-    tests_file: Path,
-    xcode_config: dict,
-    worktree_dir: Path,
-) -> str:
-    """Copy tests into the app-level test target, injecting it into the project if needed."""
-    app_test_target = xcode_config.get("app_test_target", "")
-    app_test_files_dest = xcode_config.get("app_test_files_dest", "")
-    if not app_test_target or not app_test_files_dest:
-        logger.warning(
-            "app_test_target/app_test_files_dest not configured — falling back to spm"
-        )
-        return _copy_spm_tests(instance_id, tests_file, xcode_config, worktree_dir)
-
-    inject_app_test_target(xcode_config, worktree_dir)
-
-    dest_dir = worktree_dir / app_test_files_dest
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    dst = dest_dir / tests_file.name
-    shutil.copy2(str(tests_file), str(dst))
-    logger.info("Copied test file %s → %s (app)", tests_file.name, dest_dir)
-
-    project_rel = xcode_config.get("project", "")
-    if project_rel:
-        _add_file_to_pbxproj(worktree_dir, project_rel, dst, app_test_target)
-
-    return "app"
-
-
-def _copy_ui_tests(
-    instance_id: str,
-    tests_file: Path,
-    xcode_config: dict,
-    worktree_dir: Path,
-) -> str:
-    """Copy tests into the UI test target, injecting it into the project if needed."""
-    ui_test_target = xcode_config.get("ui_test_target", "")
-    ui_test_files_dest = xcode_config.get("ui_test_files_dest", "")
-    if not ui_test_target or not ui_test_files_dest:
-        logger.warning(
-            "ui_test_target/ui_test_files_dest not configured for %s", instance_id
-        )
-        return ""
-
-    inject_ui_test_target(xcode_config, worktree_dir)
-
-    dest_dir = worktree_dir / ui_test_files_dest
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    dst = dest_dir / tests_file.name
-    shutil.copy2(str(tests_file), str(dst))
-    logger.info("Copied test file %s → %s (ui)", tests_file.name, dest_dir)
-
-    project_rel = xcode_config.get("project", "")
-    if project_rel:
-        _add_file_to_pbxproj(worktree_dir, project_rel, dst, ui_test_target)
-
-    return "ui"
-
-
 def _as_ui_test_config(xcode_config: dict) -> dict:
     """Map ui_test_* keys → app_test_* so run/cache functions work for UI tests."""
     overrides: dict = {}
@@ -565,9 +126,9 @@ def _run_xcodebuild_tests(
     test_cmd, test_cwd = cmd_info
     test_result = _run_xcodebuild(test_cmd, str(test_cwd), timeout)
     output = parse_xcodebuild_output(test_result.stdout, test_result.stderr)
-    if test_result.returncode != 0 and not output["tests"]:
+    if test_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
         output = _failed_test_result(
-            "xctest_run", "xcodebuild test exited with non-zero"
+            TEST_NAME_XCTEST_RUN, "xcodebuild test exited with non-zero"
         )
     output["_stdout"] = test_result.stdout
     output["_stderr"] = test_result.stderr
@@ -628,9 +189,9 @@ def _run_app_tests(
 
     if build_result.returncode != 0:
         output = parse_xcodebuild_output(build_result.stdout, build_result.stderr)
-        if not output["tests"]:
+        if not output[OUTPUT_KEY_TESTS]:
             output = _failed_test_result(
-                "xctest_run", "xcodebuild build-for-testing failed"
+                TEST_NAME_XCTEST_RUN, "xcodebuild build-for-testing failed"
             )
         output["_stdout"] = build_result.stdout
         output["_stderr"] = build_result.stderr
@@ -683,9 +244,9 @@ def _run_app_tests(
     test_result = _run_xcodebuild(run_cmd, str(test_cwd), _DEFAULT_XCODEBUILD_TIMEOUT)
 
     output = parse_xcodebuild_output(test_result.stdout, test_result.stderr)
-    if test_result.returncode != 0 and not output["tests"]:
+    if test_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
         output = _failed_test_result(
-            "xctest_run", "xcodebuild test exited with non-zero"
+            TEST_NAME_XCTEST_RUN, "xcodebuild test exited with non-zero"
         )
     output["_stdout"] = build_result.stdout + "\n" + test_result.stdout
     output["_stderr"] = build_result.stderr + "\n" + test_result.stderr
@@ -722,7 +283,7 @@ def _prewarm_app_binary(xcode_config: dict, products_dir: Path) -> None:
     if m:
         sim_udid = m.group(1)
     else:
-        sim_udid = _booted_udid_for_name(_parse_device_name(dest))
+        sim_udid = _booted_udid_for_name(SimulatorPool._parse_device_name(dest))
         if not sim_udid:
             return
 
@@ -828,16 +389,16 @@ def eval_single_patch(
                 if fallback.returncode != 0:
                     err_detail = fallback.stderr[:200] or fallback.stdout[:200]
                     logger.warning("Patch apply failed for %s: %s", tag, err_detail)
-                    return _failed_test_result("patch_apply", err_detail)
+                    return _failed_test_result(TEST_NAME_PATCH_APPLY, err_detail)
 
         project_rel = xcode_config.get("project", "")
         if project_rel and "project.pbxproj" in patch:
-            pbxproj_error = _validate_pbxproj(worktree_dir, project_rel)
+            pbxproj_error = TestFileCopier.validate_pbxproj(worktree_dir, project_rel)
             if pbxproj_error:
                 logger.warning(
                     "pbxproj validation failed for %s: %s", tag, pbxproj_error
                 )
-                result = _failed_test_result("pbxproj_validation", pbxproj_error[:500])
+                result = _failed_test_result(TEST_NAME_PBXPROJ_VALIDATION, pbxproj_error[:500])
                 _save_eval_output(
                     output_dir,
                     instance_id,
@@ -850,31 +411,22 @@ def eval_single_patch(
                 )
                 return result
 
-        test_type = _copy_task_tests(
-            instance_id,
-            source_tasks_dir,
-            xcode_config,
-            worktree_dir,
-        )
+        test_copier = TestFileCopier(source_tasks_dir, xcode_config)
+        test_type = test_copier.copy_task_tests(instance_id, worktree_dir)
         has_task_tests = bool(test_type)
 
-        has_ui_tests = _copy_task_uitests(
-            instance_id,
-            source_tasks_dir,
-            xcode_config,
-            worktree_dir,
-        )
+        has_ui_tests = test_copier.copy_task_uitests(instance_id, worktree_dir)
 
         all_stdout = ""
         all_stderr = ""
         dd_dir = worktree_dir / "DerivedData"
 
-        spm_standalone = test_type == "spm" and resolve_test_package_path(
+        spm_standalone = test_type == TEST_TYPE_SPM and resolve_test_package_path(
             xcode_config, worktree_dir
         )
 
-        if test_type in ("app", "ui") or spm_standalone:
-            build_output = {"tests": []}
+        if test_type in (TEST_TYPE_APP, TEST_TYPE_UI) or spm_standalone:
+            build_output = {OUTPUT_KEY_TESTS: []}
         else:
             _gate_build_start()
 
@@ -911,7 +463,7 @@ def eval_single_patch(
         run_tests = has_task_tests or not compile_only
 
         run_config = (
-            _as_ui_test_config(xcode_config) if test_type == "ui" else xcode_config
+            _as_ui_test_config(xcode_config) if test_type == TEST_TYPE_UI else xcode_config
         )
 
         test_xcode_config = run_config
@@ -925,7 +477,7 @@ def eval_single_patch(
 
         xctest_output = None
         if run_tests:
-            if test_type in ("app", "ui"):
+            if test_type in (TEST_TYPE_APP, TEST_TYPE_UI):
                 xctest_output = _run_app_tests(test_xcode_config, worktree_dir)
             else:
                 xctest_output = _run_spm_tests(
@@ -941,7 +493,7 @@ def eval_single_patch(
 
             if xctest_output is None and has_task_tests:
                 xctest_output = _failed_test_result(
-                    "unit_test_setup",
+                    TEST_NAME_UNIT_TEST_SETUP,
                     "Task tests found but test config not configured in xcode_config.yaml",
                 )
 
@@ -976,7 +528,7 @@ def eval_single_patch(
     except subprocess.TimeoutExpired as te:
         timeout_s = te.timeout if te.timeout else "?"
         logger.error("Build/test timed out for %s after %ss", tag, timeout_s)
-        result = _failed_test_result("compilation", f"Build timed out ({timeout_s}s)")
+        result = _failed_test_result(TEST_NAME_COMPILATION, f"Build timed out ({timeout_s}s)")
         _save_eval_output(
             output_dir, instance_id, attempt, eval_id, result, patch, "", ""
         )
@@ -984,7 +536,7 @@ def eval_single_patch(
     except Exception as e:
         logger.error("Error evaluating %s: %s", tag, e, exc_info=True)
         error_msg = f"{type(e).__name__}: {e}"
-        result = _failed_test_result("eval_infrastructure", error_msg[:500])
+        result = _failed_test_result(TEST_NAME_EVAL_INFRASTRUCTURE, error_msg[:500])
         try:
             _save_eval_output(
                 output_dir,
@@ -1035,7 +587,7 @@ def _save_eval_output(
 
 def _failed_test_result(name: str, message: str) -> dict:
     """Return a synthetic FAILED test result dict."""
-    return {"tests": [{"name": name, "status": "FAILED", "message": message}]}
+    return {OUTPUT_KEY_TESTS: [{"name": name, "status": TEST_STATUS_FAILED, "message": message}]}
 
 
 def _make_empty_patch_result(has_tests: bool) -> dict:
@@ -1045,7 +597,7 @@ def _make_empty_patch_result(has_tests: bool) -> dict:
         if has_tests
         else "Empty patch — nothing to evaluate"
     )
-    return _failed_test_result("patch_content", msg)
+    return _failed_test_result(TEST_NAME_PATCH_CONTENT, msg)
 
 
 def run_xcode_evals(
@@ -1154,18 +706,19 @@ def run_xcode_evals(
 
     passed_count = 0
     eval_durations: list[float] = []
-    sim_udids: list[str] = []
+    sim_pool: SimulatorPool | None = None
     try:
         if needs_sim_pool:
             typer.echo(
                 f"Creating {max_workers} simulators for parallel test execution..."
             )
-            sim_udids = _create_simulator_pool(max_workers, test_destination)
+            sim_pool = SimulatorPool(test_destination)
+            sim_pool.create(max_workers)
 
         def _assign_sim_and_run(patch_sample: dict) -> dict:
-            if sim_udids:
+            if sim_pool and sim_pool.udids:
                 idx = threading.current_thread()._anvil_idx  # type: ignore[attr-defined]
-                _tls.sim_udid = sim_udids[idx]
+                _tls.sim_udid = sim_pool.udids[idx]
                 _tls.worker_index = idx
             t0 = time.time()
             result = eval_single_patch(
@@ -1211,13 +764,13 @@ def run_xcode_evals(
                 except Exception as e:
                     logger.error("Eval failed for %s: %s", result_key, e)
                     output = _failed_test_result(
-                        "eval_infrastructure",
+                        TEST_NAME_EVAL_INFRASTRUCTURE,
                         f"Worker error: {type(e).__name__}: {e}"[:500],
                     )
                     worker_crashed = True
 
-                tests = output.get("tests", [])
-                failed = [t for t in tests if t["status"] == "FAILED"]
+                tests = output.get(OUTPUT_KEY_TESTS, [])
+                failed = [t for t in tests if t["status"] == TEST_STATUS_FAILED]
                 passed_this = len(tests) > 0 and len(failed) == 0
                 eval_results[result_key] = passed_this
                 if passed_this:
@@ -1262,9 +815,9 @@ def run_xcode_evals(
                 pbar.set_postfix_str(f"{passed}/{total} passed, {tag} {status}")
     finally:
         _build_start_lock = None
-        if sim_udids:
-            typer.echo(f"Cleaning up {len(sim_udids)} eval simulators...")
-            _destroy_simulator_pool(sim_udids)
+        if sim_pool:
+            typer.echo(f"Cleaning up {len(sim_pool.udids)} eval simulators...")
+            sim_pool.destroy()
 
     (output_dir / "eval_results.json").write_text(json.dumps(eval_results))
     avg_s = sum(eval_durations) / len(eval_durations) if eval_durations else 0
@@ -1330,21 +883,22 @@ def validate_task_tests(
 
     global _build_start_lock
 
-    sim_udids: list[str] = []
+    sim_pool: SimulatorPool | None = None
     collected: list[tuple[str, dict | None]] = []
     _build_start_lock = threading.Lock()
 
     try:
         if needs_sim_pool:
             typer.echo(f"Creating {max_workers} simulators for parallel validation...")
-            sim_udids = _create_simulator_pool(max_workers, test_destination)
+            sim_pool = SimulatorPool(test_destination)
+            sim_pool.create(max_workers)
 
         def _validate_one(inst: dict) -> tuple[str, dict | None]:
             iid = inst["instance_id"]
             task_name = _task_name(iid)
-            if sim_udids:
+            if sim_pool and sim_pool.udids:
                 idx = threading.current_thread()._anvil_idx  # type: ignore[attr-defined]
-                _tls.sim_udid = sim_udids[idx]
+                _tls.sim_udid = sim_pool.udids[idx]
                 _tls.worker_index = idx
             try:
                 result = eval_single_patch(
@@ -1386,15 +940,15 @@ def validate_task_tests(
                 pbar.set_postfix_str(task_name)
     finally:
         _build_start_lock = None
-        if sim_udids:
-            typer.echo(f"Cleaning up {len(sim_udids)} validation simulators...")
-            _destroy_simulator_pool(sim_udids)
+        if sim_pool:
+            typer.echo(f"Cleaning up {len(sim_pool.udids)} validation simulators...")
+            sim_pool.destroy()
 
     collected.sort(key=lambda x: x[0])
 
     all_ok = True
     for task_name, result in collected:
-        tests = result.get("tests", []) if result else []
+        tests = result.get(OUTPUT_KEY_TESTS, []) if result else []
 
         if not tests:
             typer.secho(
@@ -1404,10 +958,9 @@ def validate_task_tests(
             all_ok = False
             continue
 
-        _synthetic = {"compilation", "xctest_run", "unit_test_setup", "patch_apply"}
-        real_tests = [t for t in tests if t["name"] not in _synthetic]
+        real_tests = [t for t in tests if t["name"] not in SYNTHETIC_TEST_NAMES]
         synthetic_failures = [
-            t for t in tests if t["name"] in _synthetic and t["status"] == "FAILED"
+            t for t in tests if t["name"] in SYNTHETIC_TEST_NAMES and t["status"] == TEST_STATUS_FAILED
         ]
 
         if not real_tests and not synthetic_failures:
@@ -1439,7 +992,7 @@ def validate_task_tests(
         f2p_pass, f2p_fail = [], []
         for t in real_tests:
             is_f2p = "F2P" in t.get("class_name", "").upper()
-            passed = t["status"] == "PASSED"
+            passed = t["status"] == TEST_STATUS_PASSED
             if is_f2p:
                 (f2p_pass if passed else f2p_fail).append(t)
             else:

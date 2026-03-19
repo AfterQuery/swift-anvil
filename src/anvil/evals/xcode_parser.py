@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
-import json
 import re
-from pathlib import Path
+
+from .constants import (
+    OUTPUT_KEY_TESTS,
+    TEST_NAME_COMPILATION,
+    TEST_STATUS_FAILED,
+    TEST_STATUS_PASSED,
+    XCODEBUILD_FAILED,
+    XCODEBUILD_PASSED,
+)
 
 
 def parse_xcodebuild_output(stdout: str, stderr: str) -> dict:
@@ -24,7 +31,7 @@ def parse_xcodebuild_output(stdout: str, stderr: str) -> dict:
     for match in test_case_pattern.finditer(combined):
         class_name = match.group(1)
         test_name = match.group(2)
-        status = "PASSED" if match.group(3).lower() == "passed" else "FAILED"
+        status = TEST_STATUS_PASSED if match.group(3).lower() == XCODEBUILD_PASSED else TEST_STATUS_FAILED
         tests.append({"name": test_name, "class_name": class_name, "status": status})
 
     swift_testing_pattern = re.compile(
@@ -33,14 +40,14 @@ def parse_xcodebuild_output(stdout: str, stderr: str) -> dict:
     )
     for match in swift_testing_pattern.finditer(combined):
         result = match.group(2).lower()
-        if result in ("passed", "failed"):
+        if result in (XCODEBUILD_PASSED, XCODEBUILD_FAILED):
             tests.append({
                 "name": match.group(1),
                 "class_name": "",
-                "status": "PASSED" if result == "passed" else "FAILED",
+                "status": TEST_STATUS_PASSED if result == XCODEBUILD_PASSED else TEST_STATUS_FAILED,
             })
 
-    return {"tests": tests}
+    return {OUTPUT_KEY_TESTS: tests}
 
 
 def parse_build_result(returncode: int, stdout: str, stderr: str) -> dict:
@@ -48,7 +55,7 @@ def parse_build_result(returncode: int, stdout: str, stderr: str) -> dict:
     combined = stdout + "\n" + stderr
 
     if returncode == 0:
-        return {"tests": [{"name": "compilation", "status": "PASSED"}]}
+        return {OUTPUT_KEY_TESTS: [{"name": TEST_NAME_COMPILATION, "status": TEST_STATUS_PASSED}]}
 
     error_lines = []
     for line in combined.splitlines():
@@ -57,7 +64,7 @@ def parse_build_result(returncode: int, stdout: str, stderr: str) -> dict:
 
     message = "\n".join(error_lines[:5]) if error_lines else "Build failed"
     return {
-        "tests": [{"name": "compilation", "status": "FAILED", "message": message}]
+        OUTPUT_KEY_TESTS: [{"name": TEST_NAME_COMPILATION, "status": TEST_STATUS_FAILED, "message": message}]
     }
 
 
@@ -65,6 +72,6 @@ def merge_test_results(*results: dict) -> dict:
     """Merge multiple test result dicts into one."""
     all_tests = []
     for r in results:
-        if r and "tests" in r:
-            all_tests.extend(r["tests"])
-    return {"tests": all_tests}
+        if r and OUTPUT_KEY_TESTS in r:
+            all_tests.extend(r[OUTPUT_KEY_TESTS])
+    return {OUTPUT_KEY_TESTS: all_tests}
