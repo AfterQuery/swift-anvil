@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .constants import DEFAULT_DEVICE_NAME, SIMULATOR_NAME_PREFIX
+from .xcode_cache import get_app_bundle_name, get_app_test_destination
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +38,7 @@ def booted_udid_for_name(device_name: str) -> str | None:
 
 def prewarm_app_binary(xcode_config: dict, products_dir: Path) -> None:
     """Launch and terminate the app to warm the binary page cache on the simulator."""
-    dest = xcode_config.get(
-        "app_test_destination", xcode_config.get("test_destination", "")
-    )
+    dest = get_app_test_destination(xcode_config)
     m = re.search(r"\bid=([A-F0-9-]{36})\b", dest, re.IGNORECASE)
     if m:
         sim_udid = m.group(1)
@@ -48,9 +47,7 @@ def prewarm_app_binary(xcode_config: dict, products_dir: Path) -> None:
         if not sim_udid:
             return
 
-    app_bundle_name = xcode_config.get("app_bundle_name") or xcode_config.get(
-        "scheme", ""
-    )
+    app_bundle_name = get_app_bundle_name(xcode_config)
     app_bundle: Path | None = None
     if app_bundle_name and products_dir.exists():
         candidates = list(products_dir.glob(f"**/{app_bundle_name}.app"))

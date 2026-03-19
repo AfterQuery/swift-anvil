@@ -22,6 +22,9 @@ from .xcode_cache import (
     _build_xcodebuild_cmd,
     _build_xcodebuild_test_cmd,
     _run_xcodebuild,
+    get_app_bundle_name,
+    get_app_test_destination,
+    get_test_destination,
     load_xcode_config,
     resolve_test_package_path,
 )
@@ -39,6 +42,7 @@ from .build_gate import (
 from .constants import (
     DEFAULT_MAX_WORKERS,
     DEFAULT_XCODEBUILD_TIMEOUT,
+    TESTS_FILENAME,
     OUTPUT_KEY_TESTS,
     TEST_NAME_COMPILATION,
     TEST_NAME_EVAL_INFRASTRUCTURE,
@@ -193,12 +197,7 @@ def _run_app_tests(
             sorted(products_dir.glob("*.xctestrun")) if products_dir.exists() else []
         )
         if xctestrun_files:
-            dest = xcode_config.get(
-                "app_test_destination",
-                xcode_config.get(
-                    "test_destination", xcode_config.get("destination", "")
-                ),
-            )
+            dest = get_app_test_destination(xcode_config)
             only_testing = xcode_config.get("app_test_target", "")
             run_cmd = [
                 "xcodebuild",
@@ -211,9 +210,7 @@ def _run_app_tests(
             if only_testing:
                 run_cmd.extend(["-only-testing", only_testing])
         else:
-            app_name = xcode_config.get("app_bundle_name") or xcode_config.get(
-                "scheme", ""
-            )
+            app_name = get_app_bundle_name(xcode_config)
             app_bundle: Path | None = None
             if app_name and products_dir.exists():
                 candidates = list(products_dir.glob(f"**/{app_name}.app"))
@@ -266,7 +263,7 @@ def eval_single_patch(
     source_tasks_dir: Path | None = None,
 ) -> dict | None:
     """Evaluate a single patch. Returns {"tests": [...]} or None on error."""
-    tag = f"{instance_id}:{attempt}" if attempt else instance_id
+    tag = _result_key(instance_id, attempt)
     worktree_dir = None
 
     try:
@@ -502,7 +499,7 @@ def run_xcode_evals(
             iid = ps["instance_id"]
             if iid not in _has_tests_cache:
                 _has_tests_cache[iid] = (
-                    src_tasks / TestFileCopier._task_name(iid) / "tests.swift"
+                    src_tasks / TestFileCopier._task_name(iid) / TESTS_FILENAME
                 ).is_file()
 
     def _has_tests(iid: str) -> bool:
@@ -551,10 +548,7 @@ def run_xcode_evals(
         return eval_results
 
     needs_tests = n_with_tests > 0 or not compile_only
-    test_destination = xcode_config.get(
-        "test_destination",
-        xcode_config.get("destination", ""),
-    )
+    test_destination = get_test_destination(xcode_config)
     needs_sim_pool = (
         needs_tests
         and max_workers > 1

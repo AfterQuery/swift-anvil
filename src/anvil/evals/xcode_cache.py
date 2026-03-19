@@ -83,6 +83,27 @@ def _default_cache_root() -> Path:
     return repo_root() / ".xcode-cache"
 
 
+def get_test_destination(xcode_config: dict) -> str:
+    """Resolve test_destination from config (test_destination or destination)."""
+    return xcode_config.get(
+        "test_destination",
+        xcode_config.get("destination", ""),
+    )
+
+
+def get_app_test_destination(xcode_config: dict) -> str:
+    """Resolve app_test_destination from config (app_test_destination or test_destination or destination)."""
+    return xcode_config.get(
+        "app_test_destination",
+        get_test_destination(xcode_config),
+    )
+
+
+def get_app_bundle_name(xcode_config: dict) -> str:
+    """Resolve app bundle name from config (app_bundle_name or scheme)."""
+    return xcode_config.get("app_bundle_name") or xcode_config.get("scheme", "")
+
+
 def resolve_test_package_path(xcode_config: dict, work_dir: Path) -> str:
     """Resolve ``test_package_path`` to the first candidate that exists.
 
@@ -612,10 +633,7 @@ def _build_xcodebuild_test_cmd(
     if not test_scheme:
         return None
 
-    test_destination = xcode_config.get(
-        "test_destination",
-        xcode_config.get("destination", ""),
-    )
+    test_destination = get_test_destination(xcode_config)
     if not test_destination or "generic/" in test_destination:
         return None
 
@@ -1195,10 +1213,7 @@ def _build_xcodebuild_app_test_cmd(
     if not app_test_scheme:
         return None
 
-    dest = xcode_config.get(
-        "app_test_destination",
-        xcode_config.get("test_destination", xcode_config.get("destination", "")),
-    )
+    dest = get_app_test_destination(xcode_config)
     if not dest or "generic/" in dest:
         return None
 
