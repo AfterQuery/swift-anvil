@@ -35,8 +35,7 @@ def source_tasks_dir(dataset_id: str) -> Path:
     The dataset_id is typically 'datasets/ACHNBrowserUI' — this extracts
     the project name and returns repo_root/tasks/{project_name}/.
     """
-    parts = dataset_id.replace("\\", "/").strip("/").split("/")
-    project_name = parts[-1] if parts else dataset_id
+    project_name = Path(dataset_id.replace("\\", "/")).name
     return repo_root() / "tasks" / project_name
 
 

@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Callable
 
 import typer
 from tqdm import tqdm
@@ -47,99 +48,91 @@ def _eval_id(agent: str, model: str) -> str:
     return f"{agent}_{base}" if agent else base
 
 
-def _get_completed_rollouts(
-    base_out: Path, instances: list[dict], k: int
+def _get_completed_attempts(
+    base_out: Path,
+    instances: list[dict],
+    k: int,
+    rel_path: str,
+    valid: Callable[[dict], bool],
 ) -> set[tuple[str, int]]:
-    """Return set of (instance_id, attempt) pairs that have valid completed rollouts."""
+    """Return set of (instance_id, attempt) pairs whose JSON file at rel_path passes valid()."""
     completed = set()
     for inst in instances:
         iid = inst["instance_id"]
         for attempt in range(1, k + 1):
-            meta_path = (
-                base_out / iid / f"attempt_{attempt}" / "rollout" / "metadata.json"
-            )
-            if meta_path.exists():
+            path = base_out / iid / f"attempt_{attempt}" / rel_path
+            if path.exists():
                 try:
-                    meta = json.loads(meta_path.read_text())
-                    if meta.get("exit_code") == 0 and meta.get("error") is None:
+                    data = json.loads(path.read_text())
+                    if valid(data):
                         completed.add((iid, attempt))
                 except (json.JSONDecodeError, OSError):
                     pass
     return completed
 
 
+def _get_completed_rollouts(
+    base_out: Path, instances: list[dict], k: int
+) -> set[tuple[str, int]]:
+    """Return set of (instance_id, attempt) pairs that have valid completed rollouts."""
+    return _get_completed_attempts(
+        base_out, instances, k,
+        rel_path="rollout/metadata.json",
+        valid=lambda m: m.get("exit_code") == 0 and m.get("error") is None,
+    )
+
+
 def _get_completed_evals(
     base_out: Path, instances: list[dict], k: int
 ) -> set[tuple[str, int]]:
     """Return set of (instance_id, attempt) pairs that have valid completed evals."""
-    completed = set()
-    for inst in instances:
-        iid = inst["instance_id"]
-        for attempt in range(1, k + 1):
-            results_path = (
-                base_out
-                / iid
-                / f"attempt_{attempt}"
-                / "eval_results"
-                / "eval_results.json"
-            )
-            if results_path.exists():
-                try:
-                    json.loads(results_path.read_text())
-                    completed.add((iid, attempt))
-                except (json.JSONDecodeError, OSError):
-                    pass
-    return completed
+    return _get_completed_attempts(
+        base_out, instances, k,
+        rel_path="eval_results/eval_results.json",
+        valid=lambda _: True,
+    )
+
+
+def _move_to_errors(src: Path, base_out: Path, errors_dir: Path) -> None:
+    """Move src directory into errors_dir (mirroring its path relative to base_out)."""
+    dst = errors_dir / src.relative_to(base_out)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.move(str(src), str(dst))
 
 
 def _cleanup_bad_rollouts(base_out: Path, instances: list[dict], k: int) -> int:
     """Move bad rollouts to __errors/ folder. Returns count moved."""
     errors_dir = base_out / "__errors"
     moved = 0
-
     for inst in instances:
         iid = inst["instance_id"]
         for attempt in range(1, k + 1):
             attempt_dir = base_out / iid / f"attempt_{attempt}"
             meta_path = attempt_dir / "rollout" / "metadata.json"
-
             if meta_path.exists():
                 try:
                     meta = json.loads(meta_path.read_text())
                     if meta.get("exit_code") != 0 or meta.get("error") is not None:
-                        dst = errors_dir / iid / f"attempt_{attempt}"
-                        dst.parent.mkdir(parents=True, exist_ok=True)
-                        if dst.exists():
-                            shutil.rmtree(dst)
-                        shutil.move(str(attempt_dir), str(dst))
+                        _move_to_errors(attempt_dir, base_out, errors_dir)
                         moved += 1
                 except (json.JSONDecodeError, OSError):
                     pass
-
     return moved
 
 
-def _cleanup_bad_evals(
-    base_out: Path, instances: list[dict], k: int
-) -> int:
+def _cleanup_bad_evals(base_out: Path, instances: list[dict], k: int) -> int:
     """Move bad eval results to __errors/ folder. Returns count moved."""
     errors_dir = base_out / "__errors"
     moved = 0
-
     for inst in instances:
         iid = inst["instance_id"]
         for attempt in range(1, k + 1):
-            eval_dir = base_out / iid / f"attempt_{attempt}" / "eval_results"
-            results_path = eval_dir / "eval_results.json"
-
-            if eval_dir.exists() and not results_path.exists():
-                dst = errors_dir / iid / f"attempt_{attempt}" / "eval_results"
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                if dst.exists():
-                    shutil.rmtree(dst)
-                shutil.move(str(eval_dir), str(dst))
+            eval_results_dir = base_out / iid / f"attempt_{attempt}" / "eval_results"
+            if eval_results_dir.exists() and not (eval_results_dir / "eval_results.json").exists():
+                _move_to_errors(eval_results_dir, base_out, errors_dir)
                 moved += 1
-
     return moved
 
 
@@ -369,11 +362,11 @@ def run_evaluation(
                         pass
 
                 all_patches.append({
-                "instance_id": iid,
-                "patch": patch,
-                "prefix": eval_id,
-                "attempt": attempt,
-            })
+                    "instance_id": iid,
+                    "patch": patch,
+                    "prefix": eval_id,
+                    "attempt": attempt,
+                })
 
     total_evals = n_tasks * k
     remaining_evals = len(all_patches)

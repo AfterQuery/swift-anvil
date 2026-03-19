@@ -143,6 +143,7 @@ def print_pass_at_k_summary(summary: PassAtKSummary) -> None:
 
 
 def save_pass_at_k_json(summary: PassAtKSummary, output_path: Path) -> None:
+    pass_at_k_key = f"pass_at_{summary.k}"
     data = {
         "metadata": {
             "model": summary.model,
@@ -155,14 +156,14 @@ def save_pass_at_k_json(summary: PassAtKSummary, output_path: Path) -> None:
         },
         "aggregate": {
             "pass_at_1": summary.aggregate_pass_at_1,
-            f"pass_at_{summary.k}": summary.aggregate_pass_at_k,
+            pass_at_k_key: summary.aggregate_pass_at_k,
         },
         "per_instance": {
             r.instance_id: {
                 "attempts": r.attempts,
                 "successes": r.successes,
                 "pass_at_1": r.pass_at_1,
-                f"pass_at_{summary.k}": r.pass_at_k,
+                pass_at_k_key: r.pass_at_k,
                 "solved": r.solved,
             }
             for r in summary.per_instance

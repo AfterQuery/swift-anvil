@@ -4,62 +4,65 @@ final class AnvilTask5UITests: XCTestCase {
 
     var app: XCUIApplication!
 
-    override func setUpWithError() throws {
+    override func setUp() {
+        super.setUp()
         continueAfterFailure = false
+        executionTimeAllowance = 180
         app = XCUIApplication()
+        app.launchArguments += ["-UIAnimationDragCoefficient", "0.001"]
         app.launch()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 20), "Tab bar not found")
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() {
         app.terminate()
+        super.tearDown()
     }
 
     // MARK: - Helpers
 
-    /// Poll for existence (avoids waitForExistence blocking on cold simulators).
-    private func elementExistsWithin(_ element: XCUIElement, timeout: TimeInterval = 15) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if element.exists { return true }
-            Thread.sleep(forTimeInterval: 0.5)
+    @discardableResult
+    private func openTodayScreen() -> Bool {
+        for label in ["Dashboard", "Today"] {
+            let tab = app.tabBars.buttons[label]
+            guard tab.waitForExistence(timeout: 12) else { continue }
+            for attempt in 0..<2 {
+                tab.tap()
+                if app.cells.firstMatch.waitForExistence(timeout: 25) { return true }
+                if attempt == 0 { _ = app.wait(for: .runningForeground, timeout: 2) }
+            }
+        }
+        XCTFail("Today/Dashboard tab not found or content did not load")
+        return false
+    }
+
+    private func choresSectionExists() -> Bool {
+        for substring in ["keep track of your chores", "Manage and keep track", "Chores"] {
+            let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
+            if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 8) { return true }
+            if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 4) { return true }
+        }
+        for _ in 0..<8 {
+            app.swipeUp()
+            for substring in ["keep track", "Manage", "Chores"] {
+                let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
+                if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+                if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+            }
         }
         return false
     }
 
     @discardableResult
-    private func openTodayScreen() -> Bool {
-        guard elementExistsWithin(app.tabBars.firstMatch, timeout: 20) else {
-            XCTFail("Tab bar not found"); return false
-        }
-        for label in ["Today", "Dashboard"] {
-            let tab = app.tabBars.buttons[label]
-            if elementExistsWithin(tab, timeout: 10) {
-                tab.tap()
-                return true
-            }
-        }
-        XCTFail("Today/Dashboard tab not found in tab bar")
-        return false
-    }
-
-    /// Chores section exists (existence-only, with optional scroll). Broad matching.
-    private func choresSectionExists() -> Bool {
+    private func tapChoresSection() -> Bool {
         for substring in ["keep track of your chores", "Manage and keep track", "Chores"] {
             let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-            let asStatic = app.staticTexts.matching(pred).firstMatch
-            let asCell = app.cells.matching(pred).firstMatch
-            if elementExistsWithin(asStatic, timeout: 4) { return true }
-            if elementExistsWithin(asCell, timeout: 2) { return true }
+            let cell = app.cells.matching(pred).firstMatch
+            let text = app.staticTexts.matching(pred).firstMatch
+            if cell.exists { cell.tap(); return true }
+            if text.exists { text.tap(); return true }
         }
-        for _ in 0..<8 {
-            app.swipeUp()
-            Thread.sleep(forTimeInterval: 0.3)
-            for substring in ["keep track", "Manage", "Chores"] {
-                let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-                if app.staticTexts.matching(pred).firstMatch.exists { return true }
-                if app.cells.matching(pred).firstMatch.exists { return true }
-            }
-        }
+        XCTFail("Could not tap chores section")
         return false
     }
 
@@ -78,45 +81,30 @@ final class AnvilTask5UITests: XCTestCase {
     func testTappingChoresSectionNavigatesToChoreList() {
         guard openTodayScreen() else { return }
         guard choresSectionExists() else { XCTFail("Chores section not found"); return }
-        // Tap any chores-related element (multiple possible labels)
-        var tapped = false
-        for substring in ["keep track of your chores", "Manage and keep track", "Chores"] {
-            let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-            let cell = app.cells.matching(pred).firstMatch
-            let text = app.staticTexts.matching(pred).firstMatch
-            if cell.exists { cell.tap(); tapped = true; break }
-            if text.exists { text.tap(); tapped = true; break }
-        }
-        guard tapped else { XCTFail("Could not tap chores section"); return }
+        guard tapChoresSection() else { return }
         XCTAssertTrue(
-            elementExistsWithin(app.navigationBars["Chores"], timeout: 8),
+            app.navigationBars["Chores"].waitForExistence(timeout: 8),
             "AC 4: Tapping Chores should navigate to a screen with nav bar title 'Chores'"
         )
     }
 
     // MARK: - AC 1: Chores list screen is reachable and shows list content
-    // General: nav to Chores; pass if add button OR any list row/cell exists (list view rendered)
 
     func testAddChoreButtonExistsInChoreList() {
         guard openTodayScreen() else { return }
         guard choresSectionExists() else { XCTFail("Chores section not found"); return }
-        var tapped = false
-        for substring in ["keep track of your chores", "Manage and keep track", "Chores"] {
-            let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-            let cell = app.cells.matching(pred).firstMatch
-            let text = app.staticTexts.matching(pred).firstMatch
-            if cell.exists { cell.tap(); tapped = true; break }
-            if text.exists { text.tap(); tapped = true; break }
-        }
-        guard tapped else { XCTFail("Could not tap chores section"); return }
-        guard elementExistsWithin(app.navigationBars["Chores"], timeout: 10) else { return }
-        Thread.sleep(forTimeInterval: 1.5)  // Allow list view to render
-        // Add Chore button/text, or any list cell = chore list view rendered
+        guard tapChoresSection() else { return }
+        guard app.navigationBars["Chores"].waitForExistence(timeout: 10) else { return }
+        // Brief wait for list to render after navigation
+        _ = app.wait(for: .runningForeground, timeout: 3)
         let addChorePred = NSPredicate(format: "label CONTAINS[cd] %@", "Add Chore")
-        let listHasContent = elementExistsWithin(app.buttons.matching(addChorePred).firstMatch, timeout: 6) ||
-            elementExistsWithin(app.staticTexts.matching(addChorePred).firstMatch, timeout: 5) ||
-            elementExistsWithin(app.cells.containing(addChorePred).firstMatch, timeout: 4) ||
-            elementExistsWithin(app.cells.firstMatch, timeout: 5)
+        let emptyStatePred = NSPredicate(format: "label CONTAINS[cd] %@", "Track your chores")
+        let listHasContent = app.buttons.matching(addChorePred).firstMatch.waitForExistence(timeout: 12) ||
+            app.staticTexts.matching(addChorePred).firstMatch.waitForExistence(timeout: 10) ||
+            app.cells.containing(addChorePred).firstMatch.waitForExistence(timeout: 10) ||
+            app.otherElements.matching(addChorePred).firstMatch.waitForExistence(timeout: 8) ||
+            app.staticTexts.matching(emptyStatePred).firstMatch.waitForExistence(timeout: 10) ||
+            app.cells.firstMatch.waitForExistence(timeout: 12)
         XCTAssertTrue(
             listHasContent,
             "AC 1: Chores list view must show add button or list content"

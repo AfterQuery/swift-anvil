@@ -4,80 +4,39 @@ final class AnvilTask10UITests: XCTestCase {
 
     var app: XCUIApplication!
 
-    override func setUpWithError() throws {
+    override func setUp() {
+        super.setUp()
         continueAfterFailure = false
+        executionTimeAllowance = 180
         app = XCUIApplication()
+        app.launchArguments += ["-UIAnimationDragCoefficient", "0.001"]
         app.launch()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 20), "App tab bar must appear")
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() {
         app.terminate()
-    }
-
-    // MARK: - Helpers
-
-    /// Poll for element existence (avoids waitForExistence blocking ~60s on cold simulators).
-    private func elementExistsWithin(_ element: XCUIElement, timeout: TimeInterval = 15) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if element.exists { return true }
-            Thread.sleep(forTimeInterval: 1)
-        }
-        return false
-    }
-
-    /// Poll for "More" button (Collection view can load slowly on cold launch).
-    /// Tabs.more rawValue is "more"; display may be "More" or "more" depending on localization.
-    private func moreButtonExists(timeout: TimeInterval = 90) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if app.buttons["More"].exists || app.buttons["more"].exists { return true }
-            Thread.sleep(forTimeInterval: 1)
-        }
-        return false
-    }
-
-    private func tapMoreSegment() {
-        if app.buttons["More"].exists { app.buttons["More"].tap(); return }
-        if app.buttons["more"].exists { app.buttons["more"].tap(); return }
-        XCTFail("More segment not found")
-    }
-
-    /// Tab bar visible (app ready). Use before tab bar checks on cold launch.
-    private func waitForAppReady(timeout: TimeInterval = 20) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if app.tabBars.firstMatch.exists { return true }
-            Thread.sleep(forTimeInterval: 0.5)
-        }
-        return false
+        super.tearDown()
     }
 
     // MARK: - AC 4/5: "More" option exists in Collection (existence-only after minimal navigation)
 
     func testMoreOptionExistsInCollection() {
-        XCTAssertTrue(waitForAppReady(), "App tab bar must appear")
         let collectionTab = app.tabBars.buttons["Collection"]
-        guard elementExistsWithin(collectionTab, timeout: 10) else {
-            XCTFail("Collection tab not found in tab bar"); return
-        }
+        XCTAssertTrue(collectionTab.waitForExistence(timeout: 10), "Collection tab not found in tab bar")
         collectionTab.tap()
+        let moreButton = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'more'")).firstMatch
         XCTAssertTrue(
-            moreButtonExists(timeout: 90),
+            moreButton.waitForExistence(timeout: 90),
             "AC 4/5: A 'More' option must exist in the Collection picker after the patch"
         )
     }
-    
+
     // MARK: - AC 8: Existing Items tab still accessible (existence-only)
 
     func testItemsOrCatalogTabStillExists() {
-        XCTAssertTrue(waitForAppReady(), "App tab bar must appear")
-        var found = false
-        for label in ["Items", "Catalog", "Collection"] {
-            if elementExistsWithin(app.tabBars.buttons[label], timeout: 5) {
-                found = true
-                break
-            }
+        let found = ["Items", "Catalog", "Collection"].contains {
+            app.tabBars.buttons[$0].waitForExistence(timeout: 5)
         }
         XCTAssertTrue(found, "AC 8: Items/Catalog tab must remain accessible after the patch")
     }
@@ -85,9 +44,8 @@ final class AnvilTask10UITests: XCTestCase {
     // MARK: - AC 8: Villagers still accessible (existence-only)
 
     func testVillagersTabStillExists() {
-        XCTAssertTrue(waitForAppReady(), "App tab bar must appear")
         XCTAssertTrue(
-            elementExistsWithin(app.tabBars.buttons["Villagers"], timeout: 10),
+            app.tabBars.buttons["Villagers"].waitForExistence(timeout: 10),
             "AC 8: Villagers tab must remain after Collection reorganisation"
         )
     }

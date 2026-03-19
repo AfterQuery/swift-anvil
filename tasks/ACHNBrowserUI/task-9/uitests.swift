@@ -4,51 +4,54 @@ final class AnvilTask9UITests: XCTestCase {
 
     var app: XCUIApplication!
 
-    override func setUpWithError() throws {
+    override func setUp() {
+        super.setUp()
         continueAfterFailure = false
+        executionTimeAllowance = 300
         app = XCUIApplication()
+        app.launchArguments += ["-UIAnimationDragCoefficient", "0.001"]
         app.launch()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 20), "App tab bar must appear")
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() {
         app.terminate()
+        super.tearDown()
     }
 
     // MARK: - Helpers
 
-    /// Poll for element existence without using waitForExistence (which can block ~60s when
-    /// the accessibility tree is slow on cold simulators).
-    private func elementExistsWithin(_ element: XCUIElement, timeout: TimeInterval = 15) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if element.exists { return true }
-            Thread.sleep(forTimeInterval: 1)
+    @discardableResult
+    private func openTodayScreen() -> Bool {
+        for label in ["Today", "Dashboard"] {
+            let tab = app.tabBars.buttons[label]
+            if tab.waitForExistence(timeout: 10) {
+                tab.tap()
+                _ = app.cells.firstMatch.waitForExistence(timeout: 30)
+                return true
+            }
         }
+        XCTFail("Today/Dashboard tab not found in tab bar")
         return false
     }
 
-    /// Wait for tab bar to appear (app ready). Dashboard/Today is typically the default tab.
-    private func waitForAppReady(timeout: TimeInterval = 20) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if app.tabBars.firstMatch.exists { return true }
-            Thread.sleep(forTimeInterval: 0.5)
-        }
-        return false
-    }
-
-    /// Villager Visits section guidance exists. Broad matching for localization.
     private func villagerVisitsGuidanceExists() -> Bool {
         for substring in ["Who have you talked to today", "Who have you talked", "Villager Visits", "visited"] {
             let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-            let asStatic = app.staticTexts.matching(pred).firstMatch
-            let asCell = app.cells.matching(pred).firstMatch
-            if elementExistsWithin(asStatic, timeout: 5) { return true }
-            if elementExistsWithin(asCell, timeout: 2) { return true }
+            if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 5) { return true }
+            if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
         }
         for _ in 0..<15 {
             app.swipeUp()
-            Thread.sleep(forTimeInterval: 0.3)
+            for substring in ["Who have you talked", "Villager Visits", "visited"] {
+                let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
+                if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+                if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+            }
+        }
+        // Scroll back to top in case we overshot — section may be near the beginning of the list
+        for _ in 0..<15 {
+            app.swipeDown()
             for substring in ["Who have you talked", "Villager Visits", "visited"] {
                 let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
                 if app.staticTexts.matching(pred).firstMatch.exists { return true }
@@ -58,37 +61,33 @@ final class AnvilTask9UITests: XCTestCase {
         return false
     }
 
-    /// Check if any existing Today section is present (chores, tasks, etc.) — AC 6.
-    /// Uses broad substrings to match any common Today section; layout/order varies by base commit.
     private func existingSectionExists() -> Bool {
         let candidates = [
             "chore", "task", "birthday", "mystery", "island", "nook", "music", "event",
             "turnip", "collection", "progress", "available", "new", "subscribe", "character",
             "keep track", "Manage", "Daily", "Today",
         ]
+        // Try immediate check first (with short wait for async load)
         for substring in candidates {
             let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-            let asStatic = app.staticTexts.matching(pred).firstMatch
-            let asCell = app.cells.matching(pred).firstMatch
-            if elementExistsWithin(asStatic, timeout: 3) { return true }
-            if elementExistsWithin(asCell, timeout: 2) { return true }
+            if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+            if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+        }
+        // Villager Visits is near bottom; other sections (tasks, chores) are above — swipe down first
+        for _ in 0..<10 {
+            app.swipeDown()
+            for substring in candidates {
+                let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
+                if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+                if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+            }
         }
         for _ in 0..<12 {
             app.swipeUp()
-            Thread.sleep(forTimeInterval: 0.3)
             for substring in candidates {
                 let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-                if app.staticTexts.matching(pred).firstMatch.exists { return true }
-                if app.cells.matching(pred).firstMatch.exists { return true }
-            }
-        }
-        for _ in 0..<6 {
-            app.swipeDown()
-            Thread.sleep(forTimeInterval: 0.3)
-            for substring in candidates {
-                let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-                if app.staticTexts.matching(pred).firstMatch.exists { return true }
-                if app.cells.matching(pred).firstMatch.exists { return true }
+                if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+                if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
             }
         }
         return false
@@ -97,7 +96,7 @@ final class AnvilTask9UITests: XCTestCase {
     // MARK: - AC 1: "Villager Visits" section appears on Today screen (existence-only)
 
     func testVillagerVisitsSectionHeaderVisible() {
-        XCTAssertTrue(waitForAppReady(), "App tab bar must appear")
+        guard openTodayScreen() else { return }
         XCTAssertTrue(
             villagerVisitsGuidanceExists(),
             "AC 1: 'Villager Visits' section must appear on the Today/Dashboard screen"
@@ -107,44 +106,26 @@ final class AnvilTask9UITests: XCTestCase {
     // MARK: - AC 4: Reset button is hidden when no villagers are visited (existence-only)
 
     func testResetButtonHiddenOnFreshLaunch() {
-        XCTAssertTrue(waitForAppReady(), "App tab bar must appear")
+        guard openTodayScreen() else { return }
         XCTAssertTrue(villagerVisitsGuidanceExists(), "Villager Visits section must exist")
-        // Poll: Reset may take a moment to not appear; avoid flaky instant exists check
-        var resetVisible = false
-        let deadline = Date().addingTimeInterval(3)
-        while Date() < deadline {
-            if app.buttons["Reset"].exists { resetVisible = true; break }
-            Thread.sleep(forTimeInterval: 0.3)
-        }
         XCTAssertFalse(
-            resetVisible,
+            app.buttons["Reset"].waitForExistence(timeout: 3),
             "AC 4: Reset button must not be shown when no villagers have been visited"
-        )
-    }
-
-    // MARK: - AC 3: Empty state guidance text is shown (existence-only)
-
-    func testVillagerVisitsSectionShowsGuidanceText() {
-        XCTAssertTrue(waitForAppReady(), "App tab bar must appear")
-        XCTAssertTrue(
-            villagerVisitsGuidanceExists(),
-            "AC 3: Guidance text should appear in Villager Visits section when no residents are tracked"
         )
     }
 
     // MARK: - AC 6: Today screen has Villager Visits and other content (general)
 
     func testExistingTodaySectionsRemainPresent() {
-        XCTAssertTrue(waitForAppReady(), "App tab bar must appear")
-        // General: Villager Visits exists (patch applied) and Today has other sections (no regression)
-        let villagerVisitsPresent = villagerVisitsGuidanceExists()
-        let otherSectionPresent = existingSectionExists()
+        guard openTodayScreen() else { return }
         XCTAssertTrue(
-            villagerVisitsPresent,
+            villagerVisitsGuidanceExists(),
             "AC 1/6: Villager Visits section must appear on Today screen"
         )
+        // Brief wait for list to settle after scroll (villagerVisitsGuidanceExists may have scrolled)
+        _ = app.wait(for: .runningForeground, timeout: 2)
         XCTAssertTrue(
-            otherSectionPresent,
+            existingSectionExists(),
             "AC 6: Today screen must show other sections (chores, tasks, etc.) — no regression"
         )
     }

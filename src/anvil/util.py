@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -62,14 +63,7 @@ def model_id_from_model(model: str) -> str:
 
 def provider_env_var_from_model(model: str) -> str:
     provider = (model or "").split("/")[0]
-    safe = []
-    for ch in provider:
-        if ch.isalnum():
-            safe.append(ch.upper())
-        else:
-            safe.append("_")
-
-    name = "".join(safe).strip("_")
-    if name == "":
+    name = re.sub(r"[^a-zA-Z0-9]", "_", provider).strip("_").upper()
+    if not name:
         raise ValueError("Invalid model string")
     return f"${name}_API_KEY"

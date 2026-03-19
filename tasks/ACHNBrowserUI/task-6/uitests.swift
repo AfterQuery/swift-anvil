@@ -4,38 +4,34 @@ final class AnvilTask6UITests: XCTestCase {
 
     var app: XCUIApplication!
 
-    override func setUpWithError() throws {
+    override func setUp() {
+        super.setUp()
         continueAfterFailure = false
+        executionTimeAllowance = 120
         app = XCUIApplication()
+        app.launchArguments += ["-UIAnimationDragCoefficient", "0.001"]
         app.launch()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 20), "Tab bar not found")
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() {
         app.terminate()
+        super.tearDown()
     }
 
     // MARK: - Helpers
 
-    /// Poll for existence (avoids waitForExistence blocking on cold simulators).
-    private func elementExistsWithin(_ element: XCUIElement, timeout: TimeInterval = 15) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if element.exists { return true }
-            Thread.sleep(forTimeInterval: 0.5)
-        }
-        return false
+    private var dashboardTab: XCUIElement {
+        let tab = app.tabBars.buttons["Dashboard"]
+        return tab.exists ? tab : app.tabBars.buttons["Today"]
     }
 
     // MARK: - AC 1: Dashboard tab exists in tab bar (existence-only)
 
     func testDashboardTabExistsInTabBar() {
-        guard elementExistsWithin(app.tabBars.firstMatch, timeout: 20) else {
-            XCTFail("Tab bar not found"); return
-        }
-        let dashboardTab = app.tabBars.buttons["Dashboard"]
-        let todayTab = app.tabBars.buttons["Today"]
         XCTAssertTrue(
-            elementExistsWithin(dashboardTab, timeout: 8) || elementExistsWithin(todayTab, timeout: 5),
+            app.tabBars.buttons["Dashboard"].waitForExistence(timeout: 8) ||
+            app.tabBars.buttons["Today"].waitForExistence(timeout: 5),
             "AC 1: Dashboard/Today tab must appear in the main tab bar"
         )
     }
@@ -43,12 +39,7 @@ final class AnvilTask6UITests: XCTestCase {
     // MARK: - AC 1: Dashboard is the default selected tab on launch (existence + property check)
 
     func testDashboardIsSelectedOnLaunch() {
-        guard elementExistsWithin(app.tabBars.firstMatch, timeout: 20) else {
-            XCTFail("Tab bar not found"); return
-        }
-        let dashboardTab = app.tabBars.buttons["Dashboard"]
-        let todayTab = app.tabBars.buttons["Today"]
-        let tab = elementExistsWithin(dashboardTab) ? dashboardTab : todayTab
+        let tab = dashboardTab
         XCTAssertTrue(tab.exists, "Dashboard/Today tab must exist")
         XCTAssertTrue(
             tab.isSelected,
@@ -59,18 +50,12 @@ final class AnvilTask6UITests: XCTestCase {
     // MARK: - AC 1: Dashboard navigation bar title
 
     func testDashboardShowsNavigationBarTitle() {
-        guard elementExistsWithin(app.tabBars.firstMatch, timeout: 20) else {
-            XCTFail("Tab bar not found"); return
-        }
-        let dashboardTab = app.tabBars.buttons["Dashboard"]
-        let todayTab = app.tabBars.buttons["Today"]
-        let tab = elementExistsWithin(dashboardTab) ? dashboardTab : todayTab
+        let tab = dashboardTab
         guard tab.exists else { XCTFail("Dashboard/Today tab not found"); return }
         tab.tap()
-        let hasDashboardNav = elementExistsWithin(app.navigationBars["Dashboard"], timeout: 8)
-        let hasTodayNav = elementExistsWithin(app.navigationBars["Today"], timeout: 5)
         XCTAssertTrue(
-            hasDashboardNav || hasTodayNav,
+            app.navigationBars["Dashboard"].waitForExistence(timeout: 8) ||
+            app.navigationBars["Today"].waitForExistence(timeout: 5),
             "AC 1: Dashboard/Today screen must have navigation bar titled 'Dashboard' or 'Today'"
         )
     }
@@ -78,11 +63,7 @@ final class AnvilTask6UITests: XCTestCase {
     // MARK: - AC 2/3/4: Dashboard tab appears before Items tab (existence-only)
 
     func testDashboardTabAppearsBeforeItemsTab() {
-        let tabBar = app.tabBars.firstMatch
-        guard elementExistsWithin(tabBar, timeout: 20) else {
-            XCTFail("Tab bar not found"); return
-        }
-        let buttons = tabBar.buttons.allElementsBoundByIndex
+        let buttons = app.tabBars.firstMatch.buttons.allElementsBoundByIndex
         guard !buttons.isEmpty else { XCTFail("No tab bar buttons found"); return }
         let firstLabel = buttons.first?.label ?? ""
         let isDashboard = firstLabel.lowercased().contains("dashboard") || firstLabel.lowercased() == "today"
