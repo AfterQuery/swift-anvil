@@ -98,19 +98,6 @@ Use `--n-attempts` to control how many runs per task (useful for pass@k metrics)
 
 ### Validate task tests
 
-Check that your `tests.swift` files behave correctly on the unpatched base commit:
-
-```bash
-anvil validate-tests --dataset datasets/ACHNBrowserUI
-```
-
-Tests are categorized by **class name**:
-
-- Classes containing `F2P` (e.g. `AnvilTask1F2PTests`) — **fail-to-pass**; must fail on base
-- All other classes (repo's own tests, `AnvilTask2P2PTests`, etc.) — **pass-to-pass**; must pass on base
-
-The command reports inconsistencies (f2p tests that pass, or p2p tests that fail on the unpatched commit).
-
 ### Oracle Agent
 
 Use the `oracle` agent to validate your task harnesses before running LLM agents:
@@ -149,20 +136,14 @@ Each dataset needs a `xcode_config.yaml` in its source tasks directory (e.g. `ta
 
 ## Writing task tests
 
-Each task's `tests.swift` is copied into the test target during evaluation. Use XCTest class names to indicate test category:
+Each task's `tests.swift` is copied into the test target during evaluation. Use standard XCTest classes:
 
 ```swift
-// Fail-to-pass: tests new functionality introduced by the gold patch.
-// Must FAIL on the unpatched base commit, PASS after the patch.
-final class AnvilTask1F2PTests: XCTestCase {
+final class AnvilTask1Tests: XCTestCase {
     func testNewFeature() { ... }
 }
 
-// Pass-to-pass: regression tests for existing functionality.
-// Must PASS on both the base commit and after the patch.
-final class AnvilTask1P2PTests: XCTestCase {
+final class AnvilTask1RegressionTests: XCTestCase {
     func testExistingBehavior() { ... }
 }
 ```
-
-The repo's own pre-existing tests are automatically treated as pass-to-pass. Run `anvil validate-tests` to verify consistency before running model evaluations.

@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 import threading
@@ -14,10 +13,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import typer
-from ruamel.yaml import YAML
 from tqdm import tqdm
 
-from ..config import repo_root, source_tasks_dir
+from ..config import source_tasks_dir
 from .xcode_cache import (
     XcodeBuildCache,
     _as_build_for_testing,
@@ -38,7 +36,6 @@ from .constants import (
     DEFAULT_MAX_WORKERS,
     DEFAULT_XCODEBUILD_TIMEOUT,
     OUTPUT_KEY_TESTS,
-    SYNTHETIC_TEST_NAMES,
     TEST_NAME_COMPILATION,
     TEST_NAME_EVAL_INFRASTRUCTURE,
     TEST_NAME_PATCH_APPLY,
@@ -47,7 +44,6 @@ from .constants import (
     TEST_NAME_UNIT_TEST_SETUP,
     TEST_NAME_XCTEST_RUN,
     TEST_STATUS_FAILED,
-    TEST_STATUS_PASSED,
     TEST_TYPE_APP,
     TEST_TYPE_SPM,
     TEST_TYPE_UI,
@@ -815,227 +811,3 @@ def run_xcode_evals(
     )
 
     return eval_results
-
-
-def validate_task_tests(
-    dataset_id: str,
-    max_workers: int | None = None,
-) -> int:
-    """Run task tests on the unpatched base to verify f2p/p2p expectations. Returns 0 on success."""
-    dataset_tasks_dir = repo_root() / dataset_id / "tasks"
-    src_tasks = source_tasks_dir(dataset_id)
-
-    if not dataset_tasks_dir.exists():
-        typer.echo(f"Error: dataset tasks dir not found: {dataset_tasks_dir}")
-        return 1
-
-    xcode_config = load_xcode_config(dataset_tasks_dir, dataset_id=dataset_id)
-    cache = XcodeBuildCache()
-
-    instances = _load_instances_yaml(dataset_tasks_dir / "instances.yaml")
-
-    tasks_with_tests = []
-    for inst in instances:
-        iid = inst["instance_id"]
-        if (src_tasks / TestFileCopier._task_name(iid) / "tests.swift").is_file():
-            tasks_with_tests.append(inst)
-
-    if not tasks_with_tests:
-        typer.echo("No tasks with tests.swift found — nothing to validate.")
-        return 0
-
-    if max_workers is None:
-        max_workers = min(len(tasks_with_tests), DEFAULT_MAX_WORKERS)
-    max_workers = min(max_workers, len(tasks_with_tests))
-
-    typer.echo(
-        f"Validating {len(tasks_with_tests)} task(s) on unpatched base commit "
-        f"({max_workers} worker{'s' if max_workers > 1 else ''})"
-    )
-    typer.echo(
-        "  (class name contains 'F2P' = fail-to-pass, all others = pass-to-pass)\n"
-    )
-
-    output_dir = Path(tempfile.mkdtemp(prefix="anvil-validate-"))
-
-    test_destination = xcode_config.get(
-        "test_destination",
-        xcode_config.get("destination", ""),
-    )
-    needs_sim_pool = (
-        max_workers > 1
-        and len(tasks_with_tests) > 1
-        and test_destination
-        and "generic/" not in test_destination
-    )
-
-    global _build_start_lock
-
-    sim_pool: SimulatorPool | None = None
-    collected: list[tuple[str, dict | None]] = []
-    _build_start_lock = threading.Lock()
-
-    try:
-        if needs_sim_pool:
-            typer.echo(f"Creating {max_workers} simulators for parallel validation...")
-            sim_pool = SimulatorPool(test_destination)
-            sim_pool.create(max_workers)
-
-        def _validate_one(inst: dict) -> tuple[str, dict | None]:
-            iid = inst["instance_id"]
-            task_name = TestFileCopier._task_name(iid)
-            if sim_pool and sim_pool.udids:
-                idx = threading.current_thread()._anvil_idx  # type: ignore[attr-defined]
-                _tls.sim_udid = sim_pool.udids[idx]
-                _tls.worker_index = idx
-            try:
-                result = eval_single_patch(
-                    patch="",
-                    instance_id=iid,
-                    base_commit=inst["base_commit"],
-                    repo_name=inst["repo_name"],
-                    xcode_config=xcode_config,
-                    cache=cache,
-                    output_dir=output_dir,
-                    eval_id="validate-base",
-                    attempt=None,
-                    compile_only=False,
-                    source_tasks_dir=src_tasks,
-                )
-            except Exception as e:
-                logger.error("Validation failed for %s: %s", task_name, e)
-                result = None
-            return (task_name, result)
-
-        with ThreadPoolExecutor(
-            max_workers=max_workers,
-            initializer=_make_thread_index_initializer(),
-        ) as pool:
-            future_to_task: dict = {}
-            for inst in tasks_with_tests:
-                future = pool.submit(_validate_one, inst)
-                future_to_task[future] = TestFileCopier._task_name(inst["instance_id"])
-
-            pbar = tqdm(
-                as_completed(future_to_task),
-                total=len(future_to_task),
-                desc="Validating",
-                unit="task",
-            )
-            for future in pbar:
-                task_name, result = future.result()
-                collected.append((task_name, result))
-                pbar.set_postfix_str(task_name)
-    finally:
-        _build_start_lock = None
-        if sim_pool:
-            typer.echo(f"Cleaning up {len(sim_pool.udids)} validation simulators...")
-            sim_pool.destroy()
-
-    collected.sort(key=lambda x: x[0])
-
-    all_ok = True
-    for task_name, result in collected:
-        tests = result.get(OUTPUT_KEY_TESTS, []) if result else []
-
-        if not tests:
-            typer.secho(
-                f"  {task_name}: ERROR — no test results (infrastructure issue?)",
-                fg=typer.colors.RED,
-            )
-            all_ok = False
-            continue
-
-        real_tests = [t for t in tests if t["name"] not in SYNTHETIC_TEST_NAMES]
-        synthetic_failures = [
-            t for t in tests if t["name"] in SYNTHETIC_TEST_NAMES and t["status"] == TEST_STATUS_FAILED
-        ]
-
-        if not real_tests and not synthetic_failures:
-            typer.secho(
-                f"  {task_name}: OK — compile-only (no unit tests)",
-                fg=typer.colors.GREEN,
-            )
-            continue
-
-        if not real_tests and synthetic_failures:
-            test_src = src_tasks / task_name / "tests.swift"
-            has_f2p = (
-                "F2P" in test_src.read_text().upper() if test_src.is_file() else False
-            )
-            if has_f2p:
-                typer.secho(
-                    f"  {task_name}: OK — tests failed to compile on base (f2p expected)",
-                    fg=typer.colors.GREEN,
-                )
-            else:
-                typer.secho(
-                    f"  {task_name}: ERROR — tests failed to compile on base (no F2P classes — test bug?)",
-                    fg=typer.colors.RED,
-                )
-                all_ok = False
-            continue
-
-        p2p_pass, p2p_fail = [], []
-        f2p_pass, f2p_fail = [], []
-        for t in real_tests:
-            is_f2p = "F2P" in t.get("class_name", "").upper()
-            passed = t["status"] == TEST_STATUS_PASSED
-            if is_f2p:
-                (f2p_pass if passed else f2p_fail).append(t)
-            else:
-                (p2p_pass if passed else p2p_fail).append(t)
-
-        issues = []
-        if f2p_pass:
-            issues.append(f"{len(f2p_pass)} f2p test(s) PASS (should fail)")
-        if p2p_fail:
-            issues.append(f"{len(p2p_fail)} p2p test(s) FAIL (should pass)")
-
-        counts = []
-        if f2p_fail:
-            counts.append(f"{len(f2p_fail)} f2p fail")
-        if f2p_pass:
-            counts.append(f"{len(f2p_pass)} f2p pass")
-        if p2p_pass:
-            counts.append(f"{len(p2p_pass)} p2p pass")
-        if p2p_fail:
-            counts.append(f"{len(p2p_fail)} p2p fail")
-
-        summary = ", ".join(counts)
-
-        if issues:
-            typer.secho(
-                f"  {task_name}: ISSUE — {'; '.join(issues)}  ({summary})",
-                fg=typer.colors.RED,
-            )
-            for t in f2p_pass:
-                cls = t.get("class_name", "?")
-                typer.echo(f"    f2p should fail: {cls}.{t['name']}")
-            for t in p2p_fail:
-                cls = t.get("class_name", "?")
-                msg = t.get("message", "")
-                typer.echo(
-                    f"    p2p should pass: {cls}.{t['name']}{': ' + msg[:80] if msg else ''}"
-                )
-            all_ok = False
-        else:
-            typer.secho(f"  {task_name}: OK — {summary}", fg=typer.colors.GREEN)
-
-    typer.echo("")
-    shutil.rmtree(output_dir, ignore_errors=True)
-
-    if all_ok:
-        typer.secho(
-            "All task tests consistent with expectations.", fg=typer.colors.GREEN
-        )
-        return 0
-    else:
-        typer.secho("Some tasks have inconsistencies — see above.", fg=typer.colors.RED)
-        return 1
-
-
-def _load_instances_yaml(path: Path) -> list[dict]:
-    """Load instances from instances.yaml."""
-    loader = YAML()
-    return list(loader.load(path))
