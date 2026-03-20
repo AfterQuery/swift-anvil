@@ -4,38 +4,21 @@ A benchmark for evaluating LLM coding agents on real-world Swift/iOS tasks. Agen
 
 ## Setup
 
-**1. Install dependencies**
+**1. Install dependencies and Xcode prerequisites**
 
 ```bash
-uv venv
-source .venv/bin/activate
-uv sync
+make setup
 ```
 
-**2. Install Xcode prerequisites**
+**2. Configure environment**
 
-```bash
-xcode-select --install
-xcodebuild -downloadPlatform iOS
-```
-
-**3. Configure environment**
-
-Copy `.env.example` to `.env` and fill in:
+`make setup` copies `.env.example` to `.env` automatically. Open `.env` and fill in:
 
 - `OPENROUTER_API_KEY` (or whichever provider you're using)
 - `REGISTRY_USERNAME` - your Docker Hub username
 - `REGISTRY_PASSWORD` - a Docker Hub [access token](https://hub.docker.com/settings/security)
 
-**4. Clone source repositories**
-
-Clone the repo you want to evaluate into the `repos/` directory:
-
-```bash
-git clone https://github.com/Dimillian/ACHNBrowserUI repos/ACHNBrowserUI
-```
-
-**5. Authenticate services**
+**3. Authenticate services**
 
 Make sure Docker is running locally, then:
 
@@ -44,7 +27,7 @@ modal setup          # Modal account for sandboxed agent execution
 docker login         # Docker Hub for image pulls
 ```
 
-**6. Create a private Docker Hub repository**
+**4. Create a private Docker Hub repository**
 
 Go to [hub.docker.com](https://hub.docker.com) and create a new **private** repository (e.g., `anvil-images`).
 
@@ -78,12 +61,6 @@ Cached DerivedData is stored in `.xcode-cache/` in the project root. This takes 
 
 ### Run evaluations
 
-**Via GitHub Actions (recommended):**
-
-Use the [Anvil Eval workflow](https://github.com/AfterQuery/anvil-swift/actions/workflows/eval.yml) to run evaluations in CI. Click **Run workflow**, pick a dataset, model, and agent from the dropdowns, then set the number of attempts. Results are uploaded as artifacts on the workflow run.
-
-**Locally:**
-
 ```bash
 anvil run-evals \
   --dataset datasets/ACHNBrowserUI \
@@ -95,8 +72,6 @@ anvil run-evals \
 Use `--n-attempts` to control how many runs per task (useful for pass@k metrics). Results are saved to `<dataset>/runs/<agent>_<model>/`.
 
 > 💡 **Progress is saved automatically** to minimize costs. If you re-run the same command, completed tasks are skipped. Use `--no-continue` to start fresh.
-
-### Validate task tests
 
 ### Oracle Agent
 
@@ -125,6 +100,10 @@ Each dataset needs a `xcode_config.yaml` in its source tasks directory (e.g. `ta
 | `--eval-backend`       | `xcode`                 | `xcode` (local macOS) or `modal` (Docker/Modal)     |
 | `--dockerhub-username` | `REGISTRY_USERNAME` env | Docker Hub username (modal backend)                 |
 | `--dockerhub-repo`     | `anvil-images`          | Docker Hub repo name (modal backend)                |
+
+### GitHub Actions
+
+Use the [Anvil Eval workflow](https://github.com/AfterQuery/anvil-swift/actions/workflows/eval.yml) to run evaluations in CI. Click **Run workflow**, pick a dataset, model, and agent from the dropdowns, then set the number of attempts. Results are uploaded as artifacts on the workflow run.
 
 ## How it works
 
