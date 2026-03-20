@@ -111,6 +111,6 @@ GitHub Actions workflows are included in the repo under `.github/workflows/`. Th
    - `REGISTRY_USERNAME`
    - `REGISTRY_PASSWORD`
 
-2. Go to **Actions → Anvil Eval**, click **Run workflow**, and pick a dataset, model, agent, and number of attempts from the dropdowns.
+2. Go to **Actions → Anvil Eval**, click **Run workflow**, and pick a dataset, model, agent, and number of attempts from the dropdowns. See an [example run](https://github.com/AfterQuery/swift-anvil/actions/workflows/eval.yml).
 
 Results are committed back to the repo under `gha_runs/` and are also available as workflow artifacts.
