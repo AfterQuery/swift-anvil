@@ -39,7 +39,7 @@ docker login         # Docker Hub for image pulls
 
 Go to [hub.docker.com](https://hub.docker.com) and create a new **private** repository (e.g., `anvil-images`).
 
-> ⚠️ Public repos will not work—Anvil refuses to push task images to public repositories to prevent data leakage.
+> ⚠️ Public repos will not work. Anvil refuses to push task images to public repositories to prevent data leakage.
 
 ## Local Usage
 
@@ -99,6 +99,51 @@ Use `--n-attempts` to control how many runs per task (useful for pass@k metrics)
 | `--max-wait`           | auto                    | Minutes to wait for Modal rate limits               |
 | `--dockerhub-username` | `REGISTRY_USERNAME` env | Docker Hub username (modal backend)                 |
 | `--dockerhub-repo`     | `anvil-images`          | Docker Hub repo name (modal backend)                |
+
+## Writing Tasks
+
+Each task lives under `tasks/<repo_name>/task-N/` and requires three files:
+
+**`problem.md`** — problem statement shown to the agent. Include:
+
+- What to build and why
+- Acceptance criteria
+- A "Required API Surface" section listing exact type/method names the tests depend on (so the agent knows what names to expose)
+
+**`solution.diff`** — the gold patch. Used by the oracle agent to verify the harness is correct before running LLM agents.
+
+**`tests.swift`** — XCTest unit tests. The harness auto-routes based on imports:
+
+- `import <SPMPackage>` only → copied into the SPM package test target (`test_files_dest` in `xcode_config.yaml`)
+- `@testable import <AppModule>` → injected into the app test target
+- Use `uitests.swift` instead for XCUIApplication UI tests (auto-routed to the UI test target)
+
+**`metadata.yaml`** (dataset-level, not per-task) — maps each task to its base commit SHA in the source repo:
+
+```yaml
+base_commits:
+  task-1: <sha>
+  task-2: <sha>
+```
+
+**`xcode_config.yaml`** (dataset-level) — configures the Xcode build. At minimum:
+
+```yaml
+project: <RepoName>/<RepoName>.xcodeproj
+scheme: <SchemeName>
+test_package_path: <RepoName>/Packages/<PackageName>
+test_files_dest: Tests/<TargetName>
+test_scheme: <PackageScheme>
+test_destination: "platform=iOS Simulator,name=iPhone 16,OS=latest"
+```
+
+For app-level tests (`@testable import`), add `app_test_target` and `app_test_files_dest`. Only set `app_test_module` if the Swift module name differs from `scheme`.
+
+After writing tasks, run the oracle to verify all gold patches pass before running LLM agents:
+
+```bash
+anvil run-evals --dataset datasets/<repo_name> --agent oracle --no-continue
+```
 
 ## GitHub Actions
 

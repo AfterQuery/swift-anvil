@@ -5,9 +5,6 @@
 project: ACHNBrowserUI/ACHNBrowserUI.xcodeproj
 scheme: ACHNBrowserUI
 
-# generic/platform for compile-only (no simulator needed)
-destination: "generic/platform=iOS Simulator"
-
 # Per-task unit tests.
 # Each task can have a single tests.swift file at tasks/ACHNBrowserUI/task-N/tests.swift.
 # The eval harness copies it into test_files_dest before running xcodebuild test.
@@ -23,19 +20,13 @@ test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
 # Tests using `@testable import AC_Helper` are automatically routed here.
 # The harness programmatically injects the test target into project.pbxproj.
 # Note: The app's Swift module name is AC_Helper (from PRODUCT_NAME = "AC Helper").
-app_test_scheme: ACHNBrowserUI
 app_test_target: ACHNBrowserUITests
 app_test_files_dest: ACHNBrowserUI/ACHNBrowserUITests
-app_test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
 app_test_module: AC_Helper
 
-# UI tests (XCUIApplication).  Tasks with tests.swift containing XCUIApplication
-# are automatically routed here.  The harness injects this target into project.pbxproj.
-ui_test_scheme: ACHNBrowserUI
+# UI tests (uitests.swift). The harness injects this target into project.pbxproj.
 ui_test_target: ACHNBrowserUIUITests
 ui_test_files_dest: ACHNBrowserUI/ACHNBrowserUIUITests
-ui_test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
-ui_test_bundle_id: com.anvil.uitests
 # The PRODUCT_NAME differs from the scheme name; used to locate the .app bundle
 # in DerivedData when providing UITargetAppPath for test-without-building.
 app_bundle_name: "AC Helper"
