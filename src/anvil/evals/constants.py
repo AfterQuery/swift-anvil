@@ -67,6 +67,7 @@ OUTPUT_KEY_TESTS = "tests"
 # Eval / build settings
 # -----------------------------------------------------------------------------
 DEFAULT_XCODEBUILD_TIMEOUT = 600
+DEFAULT_BUILD_TIMEOUT = 1200  # Cache warming / main build
 DEFAULT_MAX_WORKERS = 3
 BUILD_GATE_SECONDS = 1
 

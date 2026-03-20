@@ -15,10 +15,9 @@ from ruamel.yaml import YAML as _YAML
 
 from ..config import repo_root, source_tasks_dir
 
-logger = logging.getLogger(__name__)
+from .constants import DEFAULT_BUILD_TIMEOUT, PROJECT_PBXPROJ, XCODE_CONFIG_PROJECT
 
-# Default build timeout when not specified in xcode_config (seconds).
-_DEFAULT_BUILD_TIMEOUT = 1200
+logger = logging.getLogger(__name__)
 
 # Standard Xcode pbxproj constants.
 _PBX_UUID_LENGTH = 24
@@ -232,7 +231,7 @@ class XcodeBuildCache:
                 clean=True,
                 allow_pkg_resolution=True,
             )
-            build_timeout = xcode_config.get("build_timeout", _DEFAULT_BUILD_TIMEOUT)
+            build_timeout = xcode_config.get("build_timeout", DEFAULT_BUILD_TIMEOUT)
             result = _run_xcodebuild(build_cmd, str(work_dir), build_timeout)
 
             if result.returncode != 0:
@@ -266,7 +265,7 @@ class XcodeBuildCache:
     @staticmethod
     def _package_resolved_path(xcode_config: dict, work_dir: Path) -> Path | None:
         """Return the project-level Package.resolved path, or None."""
-        project_rel = xcode_config.get("project", "")
+        project_rel = xcode_config.get(XCODE_CONFIG_PROJECT, "")
         if not project_rel:
             return None
         return (
@@ -376,7 +375,7 @@ class XcodeBuildCache:
         test_cmd, test_cwd = test_cmd_info
         test_cmd = _as_build_for_testing(test_cmd)
 
-        build_timeout = xcode_config.get("build_timeout", _DEFAULT_BUILD_TIMEOUT)
+        build_timeout = xcode_config.get("build_timeout", DEFAULT_BUILD_TIMEOUT)
         typer.echo(f"  Warming test DerivedData for {repo_name}@{base_commit[:8]}...")
         result = _run_xcodebuild(test_cmd, str(test_cwd), build_timeout)
         dummy_file.unlink(missing_ok=True)
@@ -433,7 +432,7 @@ class XcodeBuildCache:
         cmd, cwd = cmd_info
         cmd = _as_build_for_testing(cmd)
 
-        build_timeout = xcode_config.get("build_timeout", _DEFAULT_BUILD_TIMEOUT)
+        build_timeout = xcode_config.get("build_timeout", DEFAULT_BUILD_TIMEOUT)
         typer.echo(
             f"  Warming app-test DerivedData for {repo_name}@{base_commit[:8]}..."
         )
@@ -552,7 +551,7 @@ def _as_build_for_testing(cmd: list[str]) -> list[str]:
 def _resolve_project_args(xcode_config: dict, work_dir: Path) -> list[str]:
     """Resolve -workspace/-project args, preferring workspace when it exists."""
     workspace = xcode_config.get("workspace", "")
-    project = xcode_config.get("project", "")
+    project = xcode_config.get(XCODE_CONFIG_PROJECT, "")
 
     workspace_path = work_dir / workspace if workspace else None
     project_path = work_dir / project if project else None
@@ -699,7 +698,7 @@ def _inject_test_target(
     if not test_target or not files_dest or not project_rel:
         return False
 
-    pbxproj_path = work_dir / project_rel / "project.pbxproj"
+    pbxproj_path = work_dir / project_rel / PROJECT_PBXPROJ
     if not pbxproj_path.exists():
         logger.warning("project.pbxproj not found at %s", pbxproj_path)
         return False
@@ -1165,7 +1164,7 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
         work_dir,
         test_target=xcode_config.get("app_test_target", ""),
         files_dest=xcode_config.get("app_test_files_dest", ""),
-        project_rel=xcode_config.get("project", ""),
+        project_rel=xcode_config.get(XCODE_CONFIG_PROJECT, ""),
         bundle_id=xcode_config.get("app_test_bundle_id", "com.anvil.tests"),
         scheme_name=xcode_config.get("app_test_scheme", xcode_config.get("scheme", "")),
         product_type="com.apple.product-type.bundle.unit-test",
@@ -1186,7 +1185,7 @@ def inject_ui_test_target(xcode_config: dict, work_dir: Path) -> bool:
         work_dir,
         test_target=xcode_config.get("ui_test_target", ""),
         files_dest=xcode_config.get("ui_test_files_dest", ""),
-        project_rel=xcode_config.get("project", ""),
+        project_rel=xcode_config.get(XCODE_CONFIG_PROJECT, ""),
         bundle_id=xcode_config.get("ui_test_bundle_id", "com.anvil.uitests"),
         scheme_name=xcode_config.get("ui_test_scheme", xcode_config.get("scheme", "")),
         product_type="com.apple.product-type.bundle.ui-testing",

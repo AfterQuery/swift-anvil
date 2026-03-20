@@ -43,6 +43,8 @@ from .constants import (
     DEFAULT_MAX_WORKERS,
     DEFAULT_XCODEBUILD_TIMEOUT,
     TESTS_FILENAME,
+    XCODE_CONFIG_APP_TEST_TARGET,
+    XCODE_CONFIG_PROJECT,
     OUTPUT_KEY_TESTS,
     TEST_NAME_COMPILATION,
     TEST_NAME_EVAL_INFRASTRUCTURE,
@@ -198,7 +200,7 @@ def _run_app_tests(
         )
         if xctestrun_files:
             dest = get_app_test_destination(xcode_config)
-            only_testing = xcode_config.get("app_test_target", "")
+            only_testing = xcode_config.get(XCODE_CONFIG_APP_TEST_TARGET, "")
             run_cmd = [
                 "xcodebuild",
                 "test-without-building",
@@ -241,11 +243,9 @@ def _run_ui_tests(xcode_config: dict, worktree_dir: Path) -> dict | None:
     """Run UI tests reusing the cached DerivedData from the unit-test build."""
     ui_config = _as_ui_test_config(xcode_config)
     # Preserve the pool simulator UDID — _as_ui_test_config may overwrite it.
-    if "id=" in xcode_config.get("app_test_destination", ""):
-        ui_config = {
-            **ui_config,
-            "app_test_destination": xcode_config["app_test_destination"],
-        }
+    app_dest = get_app_test_destination(xcode_config)
+    if "id=" in app_dest:
+        ui_config = {**ui_config, "app_test_destination": app_dest}
     return _run_app_tests(ui_config, worktree_dir, is_ui_test=True)
 
 
@@ -298,7 +298,7 @@ def eval_single_patch(
                     logger.warning("Patch apply failed for %s: %s", tag, err_detail)
                     return failed_test_result(TEST_NAME_PATCH_APPLY, err_detail)
 
-        project_rel = xcode_config.get("project", "")
+        project_rel = xcode_config.get(XCODE_CONFIG_PROJECT, "")
         if project_rel and "project.pbxproj" in patch:
             pbxproj_error = TestFileCopier.validate_pbxproj(worktree_dir, project_rel)
             if pbxproj_error:
@@ -654,9 +654,8 @@ def run_xcode_evals(
 
                 passed = passed_count
                 total = len(eval_results)
-                tag = _result_key(iid, attempt)
                 status = "pass" if eval_results.get(result_key) else "fail"
-                pbar.set_postfix_str(f"{passed}/{total} passed, {tag} {status}")
+                pbar.set_postfix_str(f"{passed}/{total} passed, {result_key} {status}")
     finally:
         deactivate_build_gate()
         if sim_pool:
