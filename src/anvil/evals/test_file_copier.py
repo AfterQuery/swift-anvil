@@ -22,6 +22,7 @@ from .constants import (
     TEST_TYPE_APP,
     TEST_TYPE_SPM,
     TEST_TYPE_UI,
+    XCUI_APPLICATION_IMPORT,
     XCODE_CONFIG_APP_TEST_FILES_DEST,
     XCODE_CONFIG_APP_TEST_MODULE,
     XCODE_CONFIG_APP_TEST_SCHEME,
@@ -311,20 +312,24 @@ class TestFileCopier:
         except OSError:
             return TEST_TYPE_SPM
 
+        ui_target = xcode_config.get(XCODE_CONFIG_UI_TEST_TARGET, "")
+        ui_files_dest = xcode_config.get(XCODE_CONFIG_UI_TEST_FILES_DEST, "")
+        if ui_target and ui_files_dest and XCUI_APPLICATION_IMPORT in head:
+            return TEST_TYPE_UI
+
         app_modules = set()
         for key in (XCODE_CONFIG_APP_TEST_MODULE, XCODE_CONFIG_APP_TEST_SCHEME):
             val = xcode_config.get(key, "")
             if val:
                 app_modules.add(val)
-        if not app_modules:
-            return TEST_TYPE_SPM
+        if app_modules:
+            for line in head.splitlines()[:10]:
+                stripped = line.strip()
+                if stripped.startswith(TESTABLE_IMPORT_PREFIX):
+                    for mod in app_modules:
+                        if mod in stripped:
+                            return TEST_TYPE_APP
 
-        for line in head.splitlines()[:10]:
-            stripped = line.strip()
-            if stripped.startswith(TESTABLE_IMPORT_PREFIX):
-                for mod in app_modules:
-                    if mod in stripped:
-                        return TEST_TYPE_APP
         return TEST_TYPE_SPM
 
     def _copy_spm_tests(
