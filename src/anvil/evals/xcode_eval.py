@@ -108,6 +108,30 @@ def _as_ui_test_config(xcode_config: dict) -> dict:
     return {**xcode_config, **overrides}
 
 
+def _finalize_test_output(
+    xcode_result,
+    failure_msg: str = "xcodebuild test exited with non-zero",
+    extra_stdout: str = "",
+    extra_stderr: str = "",
+) -> dict:
+    """Parse xcodebuild output, apply fallback failure if returncode is non-zero and no tests
+    were recorded, then attach _stdout/_stderr (prefixed with any extra build output)."""
+    output = parse_xcodebuild_output(xcode_result.stdout, xcode_result.stderr)
+    if xcode_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
+        output = failed_test_result(TEST_NAME_XCTEST_RUN, failure_msg)
+    output["_stdout"] = (extra_stdout + "\n" + xcode_result.stdout) if extra_stdout else xcode_result.stdout
+    output["_stderr"] = (extra_stderr + "\n" + xcode_result.stderr) if extra_stderr else xcode_result.stderr
+    return output
+
+
+def _pop_stdout_stderr(result: dict, accumulated_stdout: str, accumulated_stderr: str) -> tuple[str, str]:
+    """Pop _stdout/_stderr from result dict and append to accumulated strings."""
+    return (
+        accumulated_stdout + "\n" + result.pop("_stdout", ""),
+        accumulated_stderr + "\n" + result.pop("_stderr", ""),
+    )
+
+
 def _run_xcodebuild_tests(
     cmd_info: tuple[list[str], Path] | None,
     timeout: int,
@@ -118,14 +142,7 @@ def _run_xcodebuild_tests(
 
     test_cmd, test_cwd = cmd_info
     test_result = _run_xcodebuild(test_cmd, str(test_cwd), timeout)
-    output = parse_xcodebuild_output(test_result.stdout, test_result.stderr)
-    if test_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
-        output = failed_test_result(
-            TEST_NAME_XCTEST_RUN, "xcodebuild test exited with non-zero"
-        )
-    output["_stdout"] = test_result.stdout
-    output["_stderr"] = test_result.stderr
-    return output
+    return _finalize_test_output(test_result)
 
 
 def _run_spm_tests(
@@ -163,9 +180,10 @@ def _run_app_tests(
 
     test_cmd, test_cwd = cmd_info
 
+    products_dir = app_test_dd / "Build" / "Products"
+
     # Delete stale xctestrun so build-for-testing regenerates it with the injected UI test target.
     if is_ui_test:
-        products_dir = app_test_dd / "Build" / "Products"
         if products_dir.exists():
             for stale in products_dir.glob("*.xctestrun"):
                 stale.unlink()
@@ -181,19 +199,13 @@ def _run_app_tests(
     )
 
     if build_result.returncode != 0:
-        output = parse_xcodebuild_output(build_result.stdout, build_result.stderr)
-        if not output[OUTPUT_KEY_TESTS]:
-            output = failed_test_result(
-                TEST_NAME_XCTEST_RUN, "xcodebuild build-for-testing failed"
-            )
-        output["_stdout"] = build_result.stdout
-        output["_stderr"] = build_result.stderr
-        return output
+        return _finalize_test_output(
+            build_result, failure_msg="xcodebuild build-for-testing failed"
+        )
 
     run_cmd = ["test-without-building" if c == "test" else c for c in test_cmd]
 
     if is_ui_test:
-        products_dir = app_test_dd / "Build" / "Products"
         prewarm_app_binary(xcode_config, products_dir)
         xctestrun_files = (
             sorted(products_dir.glob("*.xctestrun")) if products_dir.exists() else []
@@ -229,14 +241,11 @@ def _run_app_tests(
 
     test_result = _run_xcodebuild(run_cmd, str(test_cwd), DEFAULT_XCODEBUILD_TIMEOUT)
 
-    output = parse_xcodebuild_output(test_result.stdout, test_result.stderr)
-    if test_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
-        output = failed_test_result(
-            TEST_NAME_XCTEST_RUN, "xcodebuild test exited with non-zero"
-        )
-    output["_stdout"] = build_result.stdout + "\n" + test_result.stdout
-    output["_stderr"] = build_result.stderr + "\n" + test_result.stderr
-    return output
+    return _finalize_test_output(
+        test_result,
+        extra_stdout=build_result.stdout,
+        extra_stderr=build_result.stderr,
+    )
 
 
 def _run_ui_tests(xcode_config: dict, worktree_dir: Path) -> dict | None:
@@ -395,8 +404,7 @@ def eval_single_patch(
                 )
 
             if xctest_output:
-                all_stdout += "\n" + xctest_output.pop("_stdout", "")
-                all_stderr += "\n" + xctest_output.pop("_stderr", "")
+                all_stdout, all_stderr = _pop_stdout_stderr(xctest_output, all_stdout, all_stderr)
 
             if xctest_output is None and has_task_tests:
                 xctest_output = failed_test_result(
@@ -407,8 +415,7 @@ def eval_single_patch(
             if has_ui_tests:
                 ui_output = _run_ui_tests(test_xcode_config, worktree_dir)
                 if ui_output:
-                    all_stdout += "\n" + ui_output.pop("_stdout", "")
-                    all_stderr += "\n" + ui_output.pop("_stderr", "")
+                    all_stdout, all_stderr = _pop_stdout_stderr(ui_output, all_stdout, all_stderr)
                     xctest_output = (
                         merge_test_results(xctest_output, ui_output)
                         if xctest_output
