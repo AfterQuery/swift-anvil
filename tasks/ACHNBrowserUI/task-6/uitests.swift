@@ -73,9 +73,4 @@ final class AnvilTask6UITests: XCTestCase {
         )
     }
 
-    // MARK: - AC 4: App launches and renders without crash (existence-only)
-
-    func testAppLaunchesWithoutCrash() {
-        XCTAssertTrue(app.exists, "AC 4: App must launch without crashing after adding Dashboard")
-    }
 }

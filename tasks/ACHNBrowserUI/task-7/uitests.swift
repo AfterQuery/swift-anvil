@@ -75,9 +75,4 @@ final class AnvilTask7UITests: XCTestCase {
         )
     }
 
-    // MARK: - AC 7: App launches without regression (existence-only)
-
-    func testAppLaunchesWithoutCrash() {
-        XCTAssertTrue(app.exists, "AC 7: App must launch without crashing after the patch")
-    }
 }

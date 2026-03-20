@@ -7,7 +7,7 @@ final class AnvilTask5UITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        executionTimeAllowance = 180
+        executionTimeAllowance = 120
         app = XCUIApplication()
         app.launchArguments += ["-UIAnimationDragCoefficient", "0.001"]
         app.launch()

@@ -7,7 +7,7 @@ final class AnvilTask9UITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        executionTimeAllowance = 300
+        executionTimeAllowance = 120
         app = XCUIApplication()
         app.launchArguments += ["-UIAnimationDragCoefficient", "0.001"]
         app.launch()
@@ -36,23 +36,23 @@ final class AnvilTask9UITests: XCTestCase {
     }
 
     private func villagerVisitsGuidanceExists() -> Bool {
-        for substring in ["Who have you talked to today", "Who have you talked", "Villager Visits", "visited"] {
+        let substrings = ["Who have you talked to today", "Who have you talked", "Villager Visits", "visited"]
+        for substring in substrings {
             let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
             if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 5) { return true }
-            if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+            if app.cells.matching(pred).firstMatch.exists { return true }
         }
-        for _ in 0..<15 {
-            app.swipeUp()
-            for substring in ["Who have you talked", "Villager Visits", "visited"] {
+        for _ in 0..<6 {
+            app.swipeUp(velocity: .fast)
+            for substring in substrings {
                 let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-                if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
-                if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+                if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 1) { return true }
+                if app.cells.matching(pred).firstMatch.exists { return true }
             }
         }
-        // Scroll back to top in case we overshot — section may be near the beginning of the list
-        for _ in 0..<15 {
-            app.swipeDown()
-            for substring in ["Who have you talked", "Villager Visits", "visited"] {
+        for _ in 0..<6 {
+            app.swipeDown(velocity: .fast)
+            for substring in substrings {
                 let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
                 if app.staticTexts.matching(pred).firstMatch.exists { return true }
                 if app.cells.matching(pred).firstMatch.exists { return true }
@@ -67,27 +67,25 @@ final class AnvilTask9UITests: XCTestCase {
             "turnip", "collection", "progress", "available", "new", "subscribe", "character",
             "keep track", "Manage", "Daily", "Today",
         ]
-        // Try immediate check first (with short wait for async load)
         for substring in candidates {
             let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
             if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
-            if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+            if app.cells.matching(pred).firstMatch.exists { return true }
         }
-        // Villager Visits is near bottom; other sections (tasks, chores) are above — swipe down first
-        for _ in 0..<10 {
-            app.swipeDown()
+        for _ in 0..<5 {
+            app.swipeDown(velocity: .fast)
             for substring in candidates {
                 let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-                if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
-                if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+                if app.staticTexts.matching(pred).firstMatch.exists { return true }
+                if app.cells.matching(pred).firstMatch.exists { return true }
             }
         }
-        for _ in 0..<12 {
-            app.swipeUp()
+        for _ in 0..<5 {
+            app.swipeUp(velocity: .fast)
             for substring in candidates {
                 let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-                if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
-                if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
+                if app.staticTexts.matching(pred).firstMatch.exists { return true }
+                if app.cells.matching(pred).firstMatch.exists { return true }
             }
         }
         return false

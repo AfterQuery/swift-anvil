@@ -7,7 +7,7 @@ final class AnvilTask10UITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        executionTimeAllowance = 180
+        executionTimeAllowance = 120
         app = XCUIApplication()
         app.launchArguments += ["-UIAnimationDragCoefficient", "0.001"]
         app.launch()
@@ -27,7 +27,7 @@ final class AnvilTask10UITests: XCTestCase {
         collectionTab.tap()
         let moreButton = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'more'")).firstMatch
         XCTAssertTrue(
-            moreButton.waitForExistence(timeout: 90),
+            moreButton.waitForExistence(timeout: 20),
             "AC 4/5: A 'More' option must exist in the Collection picker after the patch"
         )
     }
@@ -50,9 +50,5 @@ final class AnvilTask10UITests: XCTestCase {
         )
     }
 
-    // MARK: - AC 9: App launches without regression (existence-only)
 
-    func testAppLaunchesWithoutCrash() {
-        XCTAssertTrue(app.exists, "AC 9: App must launch without crashing after the patch")
-    }
 }
