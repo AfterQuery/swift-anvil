@@ -19,6 +19,14 @@ from .constants import DEFAULT_BUILD_TIMEOUT, PROJECT_PBXPROJ, XCODE_CONFIG_PROJ
 
 logger = logging.getLogger(__name__)
 
+# DerivedData subdirectory names inside each commit cache dir / worktree.
+_DD_DIR = "DerivedData"
+_TEST_DD_DIR = "DerivedData-tests"
+_APP_TEST_DD_DIR = "DerivedData-app-tests"
+
+# Warmup Swift file dropped into the test target during cache warming.
+_WARMUP_FILENAME = "_anvil_warmup.swift"
+
 # Standard Xcode pbxproj constants.
 _PBX_UUID_LENGTH = 24
 _PBX_BUILD_ACTION_MASK = 2147483647  # INT32_MAX — Xcode default for all build phases
@@ -82,6 +90,10 @@ def _default_cache_root() -> Path:
     return repo_root() / ".xcode-cache"
 
 
+def _build_timeout(xcode_config: dict) -> int:
+    return _build_timeout(xcode_config)
+
+
 def get_test_destination(xcode_config: dict) -> str:
     """Resolve test_destination from config (test_destination or destination)."""
     return xcode_config.get(
@@ -138,13 +150,13 @@ class XcodeBuildCache:
         return self._repo_cache_dir(repo_name) / "_repo"
 
     def _derived_data_dir(self, repo_name: str, base_commit: str) -> Path:
-        return self.commit_cache_dir(repo_name, base_commit) / "DerivedData"
+        return self.commit_cache_dir(repo_name, base_commit) / _DD_DIR
 
     def _test_derived_data_dir(self, repo_name: str, base_commit: str) -> Path:
-        return self.commit_cache_dir(repo_name, base_commit) / "DerivedData-tests"
+        return self.commit_cache_dir(repo_name, base_commit) / _TEST_DD_DIR
 
     def _app_test_derived_data_dir(self, repo_name: str, base_commit: str) -> Path:
-        return self.commit_cache_dir(repo_name, base_commit) / "DerivedData-app-tests"
+        return self.commit_cache_dir(repo_name, base_commit) / _APP_TEST_DD_DIR
 
     def _main_build_failed_sentinel(self, repo_name: str, base_commit: str) -> Path:
         return self.commit_cache_dir(repo_name, base_commit) / ".main_build_failed"
@@ -231,7 +243,7 @@ class XcodeBuildCache:
                 clean=True,
                 allow_pkg_resolution=True,
             )
-            build_timeout = xcode_config.get("build_timeout", DEFAULT_BUILD_TIMEOUT)
+            build_timeout = _build_timeout(xcode_config)
             result = _run_xcodebuild(build_cmd, str(work_dir), build_timeout)
 
             if result.returncode != 0:
@@ -363,7 +375,7 @@ class XcodeBuildCache:
 
         dummy_dir = work_dir / resolved_pkg / test_files_dest
         dummy_dir.mkdir(parents=True, exist_ok=True)
-        dummy_file = dummy_dir / "_anvil_warmup.swift"
+        dummy_file = dummy_dir / _WARMUP_FILENAME
         dummy_file.write_text("import XCTest\nclass AnvilWarmupTests: XCTestCase {}\n")
 
         test_dd_dir.mkdir(parents=True, exist_ok=True)
@@ -375,7 +387,7 @@ class XcodeBuildCache:
         test_cmd, test_cwd = test_cmd_info
         test_cmd = _as_build_for_testing(test_cmd)
 
-        build_timeout = xcode_config.get("build_timeout", DEFAULT_BUILD_TIMEOUT)
+        build_timeout = _build_timeout(xcode_config)
         typer.echo(f"  Warming test DerivedData for {repo_name}@{base_commit[:8]}...")
         result = _run_xcodebuild(test_cmd, str(test_cwd), build_timeout)
         dummy_file.unlink(missing_ok=True)
@@ -412,7 +424,7 @@ class XcodeBuildCache:
 
         dummy_dir = work_dir / app_test_files_dest
         dummy_dir.mkdir(parents=True, exist_ok=True)
-        dummy_file = dummy_dir / "_anvil_warmup.swift"
+        dummy_file = dummy_dir / _WARMUP_FILENAME
         dummy_file.write_text(
             "import XCTest\nclass AnvilAppWarmupTests: XCTestCase {\n"
             "    func testWarmup() { XCTAssertTrue(true) }\n}\n"
@@ -432,7 +444,7 @@ class XcodeBuildCache:
         cmd, cwd = cmd_info
         cmd = _as_build_for_testing(cmd)
 
-        build_timeout = xcode_config.get("build_timeout", DEFAULT_BUILD_TIMEOUT)
+        build_timeout = _build_timeout(xcode_config)
         typer.echo(
             f"  Warming app-test DerivedData for {repo_name}@{base_commit[:8]}..."
         )
@@ -479,21 +491,14 @@ class XcodeBuildCache:
             ]
         )
 
-        _clone_dd_if_populated(
-            self._derived_data_dir(repo_name, base_commit),
-            target_dir / "DerivedData",
-        )
-        _clone_dd_if_populated(
-            self._test_derived_data_dir(repo_name, base_commit),
-            target_dir / "DerivedData-tests",
-        )
-        _clone_dd_if_populated(
-            self._app_test_derived_data_dir(repo_name, base_commit),
-            target_dir / "DerivedData-app-tests",
-        )
-
-        #  Removing the module cache forces Xcode to rebuild it cheaply while still reusing compiled products.
-        for dd_name in ("DerivedData", "DerivedData-tests", "DerivedData-app-tests"):
+        # Clone each DerivedData dir and strip ModuleCache so Xcode rebuilds it
+        # cheaply while still reusing compiled products.
+        for dd_name, cache_dd in [
+            (_DD_DIR, self._derived_data_dir(repo_name, base_commit)),
+            (_TEST_DD_DIR, self._test_derived_data_dir(repo_name, base_commit)),
+            (_APP_TEST_DD_DIR, self._app_test_derived_data_dir(repo_name, base_commit)),
+        ]:
+            _clone_dd_if_populated(cache_dd, target_dir / dd_name)
             module_cache = target_dir / dd_name / "ModuleCache.noindex"
             if module_cache.exists():
                 shutil.rmtree(module_cache, ignore_errors=True)
