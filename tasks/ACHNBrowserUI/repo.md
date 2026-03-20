@@ -72,40 +72,35 @@ Animal Crossing Helper: https://github.com/Dimillian/ACHNBrowserUI
 - Patch Commit: 9d33500
 - Base Commit: e4c80e95cc9ac5a0870c7e749d1c7c9b219bb360
 
-## Unit Tests
-
-### Existing repo tests (BackendTests)
-
-- `Packages/Backend/Tests/BackendTests/ItemsTests.swift` — JSON decoding for ItemResponse
-- `Packages/Backend/Tests/BackendTests/CrittersTests.swift` — critter/fish decoding, active months, categories
-- `Packages/Backend/Tests/BackendTests/CollectionTest.swift` — UserCollection toggle functionality
-
-## Scraping PRs
-
-```bash
-python3 scripts/fetch_merged_prs.py Dimillian/ACHNBrowserUI --scan-limit 20
-
-python3 scripts/fetch_merged_prs.py Dimillian/ACHNBrowserUI --min-changes 200 --max-changes 700 --scan-limit 20
-```
-
 ## Commands
 
+0. Clone source repo
+
 ```bash
-source .venv/bin/activate
-
-# Step 0: Clone source repo (required before running any commands)
 git clone https://github.com/Dimillian/ACHNBrowserUI repos/ACHNBrowserUI
+```
 
-# Step 1: Convert dataset (reads tasks/, writes to datasets/)
+1. Write tasks and convert dataset
+
+```bash
 anvil convert-dataset --dataset tasks/ACHNBrowserUI
+```
 
-# Step 2: Verify gold patches compile and pass unit tests
+2. Verify gold patches
+
+```bash
 anvil run-evals --dataset datasets/ACHNBrowserUI --agent oracle --no-continue
+```
 
-# Step 3: Publish Docker images (required for LLM agent runs — agents run in Modal)
+3. Publish Docker images
+
+```bash
 anvil publish-images --dataset datasets/ACHNBrowserUI
+```
 
-# Step 4: Run against models (agent rollout via Modal, eval via local Xcode)
+4. Run against models
+
+```bash
 anvil run-evals --dataset datasets/ACHNBrowserUI --agent mini-swe-agent --model openrouter/anthropic/claude-opus-4.6 --n-attempts 4 --no-continue
 
 anvil run-evals --dataset datasets/ACHNBrowserUI --agent mini-swe-agent --model openrouter/anthropic/claude-sonnet-4.5 --n-attempts 4 --no-continue
