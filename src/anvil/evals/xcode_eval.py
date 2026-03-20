@@ -248,16 +248,6 @@ def _run_app_tests(
     )
 
 
-def _run_ui_tests(xcode_config: dict, worktree_dir: Path) -> dict | None:
-    """Run UI tests reusing the cached DerivedData from the unit-test build."""
-    ui_config = _as_ui_test_config(xcode_config)
-    # Preserve the pool simulator UDID — _as_ui_test_config may overwrite it.
-    app_dest = get_app_test_destination(xcode_config)
-    if "id=" in app_dest:
-        ui_config = {**ui_config, "app_test_destination": app_dest}
-    return _run_app_tests(ui_config, worktree_dir, is_ui_test=True)
-
-
 def eval_single_patch(
     patch: str,
     instance_id: str,
@@ -413,7 +403,11 @@ def eval_single_patch(
                 )
 
             if has_ui_tests:
-                ui_output = _run_ui_tests(test_xcode_config, worktree_dir)
+                ui_config = _as_ui_test_config(test_xcode_config)
+                app_dest = get_app_test_destination(test_xcode_config)
+                if "id=" in app_dest:
+                    ui_config = {**ui_config, "app_test_destination": app_dest}
+                ui_output = _run_app_tests(ui_config, worktree_dir, is_ui_test=True)
                 if ui_output:
                     all_stdout, all_stderr = _pop_stdout_stderr(ui_output, all_stdout, all_stderr)
                     xctest_output = (

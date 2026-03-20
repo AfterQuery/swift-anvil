@@ -4,7 +4,6 @@ import logging
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 
 try:
@@ -34,7 +33,6 @@ from .constants import (
     XCODE_CONFIG_TEST_TARGET,
     XCODE_CONFIG_UI_TEST_FILES_DEST,
     XCODE_CONFIG_UI_TEST_TARGET,
-    XCUI_APPLICATION_IMPORT,
 )
 from .xcode_cache import (
     _pbx_uuid,
@@ -44,39 +42,6 @@ from .xcode_cache import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class CopyTargetConfig:
-    """Target name, files destination, and project path for a test copy operation."""
-
-    target: str
-    files_dest: str
-    project_rel: str
-
-    @staticmethod
-    def from_app_config(xcode_config: dict) -> CopyTargetConfig | None:
-        target = xcode_config.get(XCODE_CONFIG_APP_TEST_TARGET, "")
-        files_dest = xcode_config.get(XCODE_CONFIG_APP_TEST_FILES_DEST, "")
-        if not target or not files_dest:
-            return None
-        return CopyTargetConfig(
-            target=target,
-            files_dest=files_dest,
-            project_rel=xcode_config.get(XCODE_CONFIG_PROJECT, ""),
-        )
-
-    @staticmethod
-    def from_ui_config(xcode_config: dict) -> CopyTargetConfig | None:
-        target = xcode_config.get(XCODE_CONFIG_UI_TEST_TARGET, "")
-        files_dest = xcode_config.get(XCODE_CONFIG_UI_TEST_FILES_DEST, "")
-        if not target or not files_dest:
-            return None
-        return CopyTargetConfig(
-            target=target,
-            files_dest=files_dest,
-            project_rel=xcode_config.get(XCODE_CONFIG_PROJECT, ""),
-        )
 
 
 class TestFileCopier:
@@ -305,9 +270,18 @@ class TestFileCopier:
         test_type = self._detect_test_type(tests_file, self.xcode_config)
 
         if test_type == TEST_TYPE_UI:
-            return self._copy_ui_tests(instance_id, tests_file, worktree_dir)
+            return self._copy_to_target(
+                instance_id, tests_file, worktree_dir,
+                XCODE_CONFIG_UI_TEST_TARGET, XCODE_CONFIG_UI_TEST_FILES_DEST,
+                inject_ui_test_target, TEST_TYPE_UI,
+            )
         elif test_type == TEST_TYPE_APP:
-            return self._copy_app_tests(instance_id, tests_file, worktree_dir)
+            return self._copy_to_target(
+                instance_id, tests_file, worktree_dir,
+                XCODE_CONFIG_APP_TEST_TARGET, XCODE_CONFIG_APP_TEST_FILES_DEST,
+                inject_app_test_target, TEST_TYPE_APP,
+                fallback_spm=True,
+            )
         else:
             return self._copy_spm_tests(instance_id, tests_file, worktree_dir)
 
@@ -323,8 +297,11 @@ class TestFileCopier:
         if not uitests_file.is_file():
             return False
 
-        result = self._copy_ui_tests(instance_id, uitests_file, worktree_dir)
-        return result == TEST_TYPE_UI
+        return self._copy_to_target(
+            instance_id, uitests_file, worktree_dir,
+            XCODE_CONFIG_UI_TEST_TARGET, XCODE_CONFIG_UI_TEST_FILES_DEST,
+            inject_ui_test_target, TEST_TYPE_UI,
+        ) == TEST_TYPE_UI
 
     @staticmethod
     def _detect_test_type(tests_file: Path, xcode_config: dict) -> str:
@@ -333,9 +310,6 @@ class TestFileCopier:
             head = tests_file.read_text()[:500]
         except OSError:
             return TEST_TYPE_SPM
-
-        if xcode_config.get(XCODE_CONFIG_UI_TEST_TARGET) and XCUI_APPLICATION_IMPORT in head:
-            return TEST_TYPE_UI
 
         app_modules = set()
         for key in (XCODE_CONFIG_APP_TEST_MODULE, XCODE_CONFIG_APP_TEST_SCHEME):
@@ -393,58 +367,42 @@ class TestFileCopier:
 
         return TEST_TYPE_SPM
 
-    def _copy_app_tests(
+    def _copy_to_target(
         self,
         instance_id: str,
         tests_file: Path,
         worktree_dir: Path,
+        target_key: str,
+        files_dest_key: str,
+        inject_fn,
+        test_type: str,
+        fallback_spm: bool = False,
     ) -> str:
-        """Copy to app test target. Injects target if needed. Falls back to SPM if unconfigured."""
-        cfg = CopyTargetConfig.from_app_config(self.xcode_config)
-        if cfg is None:
+        """Copy test file to configured target. Falls back to SPM if fallback_spm and unconfigured."""
+        target = self.xcode_config.get(target_key, "")
+        files_dest = self.xcode_config.get(files_dest_key, "")
+        if not target or not files_dest:
+            if fallback_spm:
+                logger.warning(
+                    "%s/%s not configured — falling back to spm", target_key, files_dest_key
+                )
+                return self._copy_spm_tests(instance_id, tests_file, worktree_dir)
             logger.warning(
-                "app_test_target/app_test_files_dest not configured — falling back to spm"
-            )
-            return self._copy_spm_tests(instance_id, tests_file, worktree_dir)
-
-        inject_app_test_target(self.xcode_config, worktree_dir)
-
-        dest_dir = worktree_dir / cfg.files_dest
-        dest_dir.mkdir(parents=True, exist_ok=True)
-
-        dst = dest_dir / tests_file.name
-        shutil.copy2(str(tests_file), str(dst))
-        logger.info("Copied test file %s → %s (app)", tests_file.name, dest_dir)
-
-        if cfg.project_rel:
-            self._add_file_to_pbxproj(worktree_dir, cfg.project_rel, dst, cfg.target)
-
-        return TEST_TYPE_APP
-
-    def _copy_ui_tests(
-        self,
-        instance_id: str,
-        tests_file: Path,
-        worktree_dir: Path,
-    ) -> str:
-        """Copy to UI test target. Injects target if needed. Returns "" if unconfigured."""
-        cfg = CopyTargetConfig.from_ui_config(self.xcode_config)
-        if cfg is None:
-            logger.warning(
-                "ui_test_target/ui_test_files_dest not configured for %s", instance_id
+                "%s/%s not configured for %s", target_key, files_dest_key, instance_id
             )
             return ""
 
-        inject_ui_test_target(self.xcode_config, worktree_dir)
+        inject_fn(self.xcode_config, worktree_dir)
 
-        dest_dir = worktree_dir / cfg.files_dest
+        dest_dir = worktree_dir / files_dest
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         dst = dest_dir / tests_file.name
         shutil.copy2(str(tests_file), str(dst))
-        logger.info("Copied test file %s → %s (ui)", tests_file.name, dest_dir)
+        logger.info("Copied test file %s → %s (%s)", tests_file.name, dest_dir, test_type)
 
-        if cfg.project_rel:
-            self._add_file_to_pbxproj(worktree_dir, cfg.project_rel, dst, cfg.target)
+        project_rel = self.xcode_config.get(XCODE_CONFIG_PROJECT, "")
+        if project_rel:
+            self._add_file_to_pbxproj(worktree_dir, project_rel, dst, target)
 
-        return TEST_TYPE_UI
+        return test_type
