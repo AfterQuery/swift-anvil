@@ -10,15 +10,13 @@ A benchmark for evaluating LLM coding agents on real-world Swift/iOS tasks. Agen
 
 3. **Output**: Trajectories, patches, stdout/stderr, and eval results are saved per-task. A summary with pass@k metrics is printed at the end.
 
-````
-
 ## Setup
 
 **1. Install dependencies and Xcode prerequisites**
 
 ```bash
 make setup
-````
+```
 
 **2. Configure environment**
 
@@ -56,8 +54,6 @@ anvil publish-images --dataset datasets/ACHNBrowserUI
 The username and repo are read from `REGISTRY_USERNAME` and `REGISTRY_REPO` in `.env` (or pass `-u <username>` / `--repo <name>` to override).
 
 Modal sandboxes pull images from Docker Hub, so task images need to be pushed there first.
-
-To remove local anvil images: `docker rmi $(docker images $(grep REGISTRY_USERNAME .env | cut -d= -f2)/anvil-images -q) --force`
 
 ### Oracle Agent
 
