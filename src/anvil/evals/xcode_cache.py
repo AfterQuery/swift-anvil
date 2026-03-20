@@ -91,7 +91,11 @@ def _default_cache_root() -> Path:
 
 
 def _build_timeout(xcode_config: dict) -> int:
-    return _build_timeout(xcode_config)
+    raw = xcode_config.get("build_timeout", DEFAULT_BUILD_TIMEOUT)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_BUILD_TIMEOUT
 
 
 def get_test_destination(xcode_config: dict) -> str:
