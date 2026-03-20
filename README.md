@@ -2,13 +2,23 @@
 
 A benchmark for evaluating LLM coding agents on real-world Swift/iOS tasks. Agents receive a problem statement, generate a patch, and are evaluated by compiling the project and running XCTest unit tests.
 
+## How it works
+
+1. **Agent phase**: Each task runs in a Modal sandbox using a pre-built Docker image. The agent receives the problem statement and generates a patch.
+
+2. **Eval phase**: Patches are applied to a local worktree with cached DerivedData. `xcodebuild` compiles the patched project and runs per-task unit tests (from `tests.swift`). Each worker gets its own simulator clone to avoid boot conflicts during parallel evaluation.
+
+3. **Output**: Trajectories, patches, stdout/stderr, and eval results are saved per-task. A summary with pass@k metrics is printed at the end.
+
+````
+
 ## Setup
 
 **1. Install dependencies and Xcode prerequisites**
 
 ```bash
 make setup
-```
+````
 
 **2. Configure environment**
 
@@ -49,15 +59,17 @@ Modal sandboxes pull images from Docker Hub, so task images need to be pushed th
 
 To remove local anvil images: `docker rmi $(docker images $(grep REGISTRY_USERNAME .env | cut -d= -f2)/anvil-images -q) --force`
 
-### Warm the build cache (one-time)
+### Oracle Agent
 
-Pre-builds every base commit so subsequent evals only do fast incremental builds:
+Use the `oracle` agent to validate your task harnesses before running LLM agents:
 
 ```bash
-anvil warm-xcode-cache --dataset datasets/ACHNBrowserUI
+anvil run-evals --dataset datasets/ACHNBrowserUI --agent oracle
 ```
 
-Cached DerivedData is stored in `.xcode-cache/` in the project root. This takes a few minutes per unique base commit but only needs to run once.
+The oracle agent skips LLM rollouts and applies gold patches from `gold_patches.json` directly. All tests should pass if your harness is correct.
+
+Each dataset needs a `xcode_config.yaml` in its source tasks directory (e.g. `tasks/ACHNBrowserUI/xcode_config.yaml`) specifying the Xcode project/workspace, scheme, and build destination.
 
 ### Run evaluations
 
@@ -72,18 +84,6 @@ anvil run-evals \
 Use `--n-attempts` to control how many runs per task (useful for pass@k metrics). Results are saved to `<dataset>/runs/<agent>_<model>/`.
 
 > 💡 **Progress is saved automatically** to minimize costs. If you re-run the same command, completed tasks are skipped. Use `--no-continue` to start fresh.
-
-### Oracle Agent
-
-Use the `oracle` agent to validate your task harnesses before running LLM agents:
-
-```bash
-anvil run-evals --dataset datasets/ACHNBrowserUI --agent oracle
-```
-
-The oracle agent skips LLM rollouts and applies gold patches from `gold_patches.json` directly. All tests should pass if your harness is correct.
-
-Each dataset needs a `xcode_config.yaml` in its source tasks directory (e.g. `tasks/ACHNBrowserUI/xcode_config.yaml`) specifying the Xcode project/workspace, scheme, and build destination.
 
 ### Options
 
@@ -104,25 +104,3 @@ Each dataset needs a `xcode_config.yaml` in its source tasks directory (e.g. `ta
 ### GitHub Actions
 
 Use the [Anvil Eval workflow](https://github.com/AfterQuery/anvil-swift/actions/workflows/eval.yml) to run evaluations in CI. Click **Run workflow**, pick a dataset, model, and agent from the dropdowns, then set the number of attempts. Results are uploaded as artifacts on the workflow run.
-
-## How it works
-
-1. **Agent phase**: Each task runs in a Modal sandbox using a pre-built Docker image. The agent (mini-swe-agent) receives the problem statement and generates a patch.
-
-2. **Eval phase**: Patches are applied to a local worktree with cached DerivedData. `xcodebuild` compiles the patched project and runs per-task unit tests (from `tests.swift`). Each worker gets its own simulator clone to avoid boot conflicts during parallel evaluation.
-
-3. **Output**: Trajectories, patches, stdout/stderr, and eval results are saved per-task. A summary with pass@k metrics is printed at the end.
-
-## Writing task tests
-
-Each task's `tests.swift` is copied into the test target during evaluation. Use standard XCTest classes:
-
-```swift
-final class AnvilTask1Tests: XCTestCase {
-    func testNewFeature() { ... }
-}
-
-final class AnvilTask1RegressionTests: XCTestCase {
-    func testExistingBehavior() { ... }
-}
-```

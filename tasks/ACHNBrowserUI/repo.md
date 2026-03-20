@@ -99,16 +99,13 @@ git clone https://github.com/Dimillian/ACHNBrowserUI repos/ACHNBrowserUI
 # Step 1: Convert dataset (reads tasks/, writes to datasets/)
 anvil convert-dataset --dataset tasks/ACHNBrowserUI
 
-# Step 2: Warm Xcode build cache (~5 min per unique base commit)
-anvil warm-xcode-cache --dataset datasets/ACHNBrowserUI
-
-# Step 3: Verify gold patches compile and pass unit tests
+# Step 2: Verify gold patches compile and pass unit tests
 anvil run-evals --dataset datasets/ACHNBrowserUI --agent oracle --no-continue
 
-# Step 4: Publish Docker images (required for LLM agent runs — agents run in Modal)
+# Step 3: Publish Docker images (required for LLM agent runs — agents run in Modal)
 anvil publish-images --dataset datasets/ACHNBrowserUI
 
-# Step 5: Run against models (agent rollout via Modal, eval via local Xcode)
+# Step 4: Run against models (agent rollout via Modal, eval via local Xcode)
 anvil run-evals --dataset datasets/ACHNBrowserUI --agent mini-swe-agent --model openrouter/anthropic/claude-opus-4.6 --n-attempts 4 --no-continue
 
 anvil run-evals --dataset datasets/ACHNBrowserUI --agent mini-swe-agent --model openrouter/anthropic/claude-sonnet-4.5 --n-attempts 4 --no-continue

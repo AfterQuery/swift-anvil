@@ -33,7 +33,9 @@ import typer
 import yaml
 
 from ..config import repo_root
+from ..evals.xcode_cache import load_xcode_config
 from ..util import resolve_dataset_path, resolve_registry_env
+from ..warm_cache import warm_xcode_cache_for_instances
 from .models import Task, TestSpec
 
 
@@ -303,7 +305,7 @@ def convert_to_anvil_structure(
     output_path: Path,
     dockerhub_username: str,
     dockerhub_repo: str,
-) -> dict[str, list[Path]]:
+) -> tuple[dict[str, list[Path]], list[Task]]:
     """Convert a task directory to Anvil evaluation format.
 
     Handles both Docker/Modal datasets and Xcode datasets.
@@ -457,7 +459,7 @@ def convert_to_anvil_structure(
     tasks_csv_path.write_text(tasks_csv)
     created_files["config"].append(tasks_csv_path)
 
-    return created_files
+    return created_files, tasks
 
 
 def convert_dataset(
@@ -499,7 +501,7 @@ def convert_dataset(
     typer.echo(f"Output directory: {output_path}")
 
     try:
-        created_files = convert_to_anvil_structure(
+        created_files, tasks = convert_to_anvil_structure(
             dataset_path=dataset_path,
             output_path=output_path,
             dockerhub_username=dockerhub_username,
@@ -525,12 +527,27 @@ def convert_dataset(
     dataset_name = dataset_path.name
     ds_path = f"datasets/{dataset_name}"
     has_xcode_config = (dataset_path / "xcode_config.yaml").exists()
+
+    if has_xcode_config:
+        try:
+            xcode_config = load_xcode_config(dataset_path)
+            instances = [
+                {"repo_name": t.repo, "base_commit": t.base_commit, "instance_id": t.instance_id}
+                for t in tasks
+            ]
+            warm_xcode_cache_for_instances(
+                instances, xcode_config, repo_root() / "repos", dataset_label=dataset_name
+            )
+        except FileNotFoundError:
+            typer.echo("  xcode_config.yaml not found — skipping cache warm.")
+        except Exception as e:
+            typer.echo(f"  Cache warming failed: {e}", err=True)
+
     typer.echo("\nNext steps:")
     if has_xcode_config:
-        typer.echo(f"  1. Warm cache:      anvil warm-xcode-cache --dataset {ds_path}")
-        typer.echo(f"  2. Oracle eval:     anvil run-evals --dataset {ds_path} --agent oracle --compile-only")
-        typer.echo(f"  3. Publish images:  anvil publish-images --dataset {ds_path}")
-        typer.echo(f"  4. Agent eval:      anvil run-evals --dataset {ds_path} --agent mini-swe-agent --model <model> --compile-only")
+        typer.echo(f"  1. Oracle eval:     anvil run-evals --dataset {ds_path} --agent oracle --compile-only")
+        typer.echo(f"  2. Publish images:  anvil publish-images --dataset {ds_path}")
+        typer.echo(f"  3. Agent eval:      anvil run-evals --dataset {ds_path} --agent mini-swe-agent --model <model> --compile-only")
     else:
         typer.echo(f"  1. Publish images:  anvil publish-images --dataset {ds_path}")
         typer.echo(f"  2. Run evaluation:  anvil run-evals --dataset {ds_path} --agent oracle")

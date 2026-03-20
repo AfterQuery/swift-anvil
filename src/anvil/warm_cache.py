@@ -20,47 +20,24 @@ class _RepoCommit(NamedTuple):
     base_commit: str
 
 
-def warm_xcode_cache(
-    dataset: str = typer.Option(..., "--dataset", "-d", help="Dataset ID or path"),
-    workers: int = typer.Option(2, "--workers", "-w", help="Number of parallel builds"),
+def warm_xcode_cache_for_instances(
+    instances: list[dict],
+    xcode_config: dict,
+    repos_root: Path,
+    workers: int = 2,
+    dataset_label: str = "dataset",
 ) -> None:
-    """Pre-build all base commits for a dataset and cache DerivedData."""
-    dataset_tasks_dir = tasks_dir(dataset)
-    src_tasks_dir = source_tasks_dir(dataset)
+    """Pre-build base commits for a list of instances, skipping already-cached ones.
 
-    yaml = YAML()
-    instances = None
-    for candidate in [
-        dataset_tasks_dir / "instances.yaml",
-        src_tasks_dir / "instances.yaml",
-    ]:
-        if candidate.exists():
-            instances = yaml.load(candidate)
-            typer.echo(f"Loaded instances from {candidate}")
-            break
-
-    if not instances:
-        typer.echo(
-            f"Error: instances.yaml not found.\n"
-            f"  Searched: {dataset_tasks_dir / 'instances.yaml'}\n"
-            f"           {src_tasks_dir / 'instances.yaml'}",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    try:
-        xcode_config = load_xcode_config(dataset_tasks_dir, dataset_id=dataset)
-    except FileNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
+    Shared by the ``warm-xcode-cache`` CLI command and ``convert-dataset``.
+    """
     seen: dict[_RepoCommit, str] = {}
     for inst in instances:
         rc = _RepoCommit(inst["repo_name"], inst["base_commit"])
         if rc not in seen:
             seen[rc] = inst["instance_id"]
 
-    typer.echo(f"Warming Xcode build cache for {dataset}")
+    typer.echo(f"Warming Xcode build cache for {dataset_label}")
     typer.echo(f"  Unique (repo, commit) pairs: {len(seen)}")
 
     cache = XcodeBuildCache()
@@ -86,8 +63,6 @@ def warm_xcode_cache(
                 ["git", "-C", str(clone_dir), "worktree", "prune"],
                 capture_output=True,
             )
-
-    repos_root = repo_root() / "repos"
 
     unique_repos: dict[str, Path] = {}
     for rc in seen:
@@ -125,3 +100,42 @@ def warm_xcode_cache(
                 typer.echo(f"  {rc.repo_name}@{rc.base_commit[:8]}: cached")
 
     typer.echo("Cache warming complete.")
+
+
+def warm_xcode_cache(
+    dataset: str = typer.Option(..., "--dataset", "-d", help="Dataset ID or path"),
+    workers: int = typer.Option(2, "--workers", "-w", help="Number of parallel builds"),
+) -> None:
+    """Pre-build all base commits for a dataset and cache DerivedData."""
+    dataset_tasks_dir = tasks_dir(dataset)
+    src_tasks_dir = source_tasks_dir(dataset)
+
+    yaml = YAML()
+    instances = None
+    for candidate in [
+        dataset_tasks_dir / "instances.yaml",
+        src_tasks_dir / "instances.yaml",
+    ]:
+        if candidate.exists():
+            instances = yaml.load(candidate)
+            typer.echo(f"Loaded instances from {candidate}")
+            break
+
+    if not instances:
+        typer.echo(
+            f"Error: instances.yaml not found.\n"
+            f"  Searched: {dataset_tasks_dir / 'instances.yaml'}\n"
+            f"           {src_tasks_dir / 'instances.yaml'}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        xcode_config = load_xcode_config(dataset_tasks_dir, dataset_id=dataset)
+    except FileNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    warm_xcode_cache_for_instances(
+        instances, xcode_config, repo_root() / "repos", workers, dataset_label=dataset
+    )
