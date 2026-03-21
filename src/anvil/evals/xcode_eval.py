@@ -368,18 +368,17 @@ def eval_single_patch(
 
         run_tests = has_task_tests or not compile_only
 
-        run_config = (
-            _as_ui_test_config(xcode_config) if test_type == TEST_TYPE_UI else xcode_config
-        )
-
-        test_xcode_config = run_config
+        base_config = _as_ui_test_config(xcode_config) if test_type == TEST_TYPE_UI else xcode_config
         sim_udid = getattr(_tls, "sim_udid", None)
-        if sim_udid:
-            test_xcode_config = {
-                **run_config,
+        test_xcode_config = (
+            {
+                **base_config,
                 "test_destination": f"platform=iOS Simulator,id={sim_udid}",
                 "app_test_destination": f"platform=iOS Simulator,id={sim_udid}",
             }
+            if sim_udid
+            else base_config
+        )
 
         xctest_output = None
         if run_tests:
@@ -404,9 +403,8 @@ def eval_single_patch(
 
             if has_ui_tests:
                 ui_config = _as_ui_test_config(test_xcode_config)
-                app_dest = get_app_test_destination(test_xcode_config)
-                if "id=" in app_dest:
-                    ui_config = {**ui_config, "app_test_destination": app_dest}
+                if sim_udid:
+                    ui_config = {**ui_config, "app_test_destination": f"platform=iOS Simulator,id={sim_udid}"}
                 ui_output = _run_app_tests(ui_config, worktree_dir, is_ui_test=True)
                 if ui_output:
                     all_stdout, all_stderr = _pop_stdout_stderr(ui_output, all_stdout, all_stderr)
@@ -416,10 +414,7 @@ def eval_single_patch(
                         else ui_output
                     )
 
-        if xctest_output:
-            combined = merge_test_results(build_output, xctest_output)
-        else:
-            combined = build_output
+        combined = merge_test_results(build_output, xctest_output) if xctest_output else build_output
 
         save_eval_output(
             output_dir,
@@ -575,7 +570,6 @@ def run_xcode_evals(
             if sim_pool and sim_pool.udids:
                 idx = threading.current_thread()._anvil_idx  # type: ignore[attr-defined]
                 _tls.sim_udid = sim_pool.udids[idx]
-                _tls.worker_index = idx
             t0 = time.time()
             result = eval_single_patch(
                 patch=_get_patch_text(patch_sample),

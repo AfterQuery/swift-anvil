@@ -90,12 +90,3 @@ TEST_NAME_XCTEST_RUN = "xctest_run"
 TEST_NAME_EVAL_INFRASTRUCTURE = "eval_infrastructure"
 TEST_NAME_PBXPROJ_VALIDATION = "pbxproj_validation"
 TEST_NAME_PATCH_CONTENT = "patch_content"
-
-SYNTHETIC_TEST_NAMES = frozenset(
-    {
-        TEST_NAME_COMPILATION,
-        TEST_NAME_XCTEST_RUN,
-        TEST_NAME_UNIT_TEST_SETUP,
-        TEST_NAME_PATCH_APPLY,
-    }
-)
