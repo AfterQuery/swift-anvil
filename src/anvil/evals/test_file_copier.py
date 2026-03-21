@@ -45,7 +45,7 @@ from .xcode_cache import (
 logger = logging.getLogger(__name__)
 
 
-class TestFileCopier:
+class TaskTestCopier:
     """Copies task test files (tests.swift, uitests.swift) into the worktree."""
 
     @staticmethod

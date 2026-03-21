@@ -4,6 +4,8 @@
 # Python
 __pycache__/
 *.egg-info/
+tests/__init__.py
+.pytest_cache
 
 # Local Working Stuff
 .env

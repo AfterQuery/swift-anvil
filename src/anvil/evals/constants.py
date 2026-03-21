@@ -42,7 +42,7 @@ XCUI_APPLICATION_IMPORT = "XCUIApplication"
 TESTABLE_IMPORT_PREFIX = "@testable import"
 
 # -----------------------------------------------------------------------------
-# Test types (TestFileCopier.copy_task_tests return values)
+# Test types (TaskTestCopier.copy_task_tests return values)
 # -----------------------------------------------------------------------------
 TEST_TYPE_APP = "app"
 TEST_TYPE_SPM = "spm"

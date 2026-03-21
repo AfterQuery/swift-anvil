@@ -24,3 +24,6 @@ anvil = "anvil.cli:app"
 
 [tool.uv]
 package = true
+
+[dependency-groups]
+dev = ["pytest>=8.0"]

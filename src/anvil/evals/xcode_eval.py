@@ -64,7 +64,7 @@ from .eval_output import (
     save_eval_output,
 )
 from .simulator_pool import SimulatorPool, prewarm_app_binary
-from .test_file_copier import TestFileCopier
+from .test_file_copier import TaskTestCopier
 
 logger = logging.getLogger(__name__)
 
@@ -299,7 +299,7 @@ def eval_single_patch(
 
         project_rel = xcode_config.get(XCODE_CONFIG_PROJECT, "")
         if project_rel and "project.pbxproj" in patch:
-            pbxproj_error = TestFileCopier.validate_pbxproj(worktree_dir, project_rel)
+            pbxproj_error = TaskTestCopier.validate_pbxproj(worktree_dir, project_rel)
             if pbxproj_error:
                 logger.warning(
                     "pbxproj validation failed for %s: %s", tag, pbxproj_error
@@ -317,7 +317,7 @@ def eval_single_patch(
                 )
                 return result
 
-        test_copier = TestFileCopier(source_tasks_dir, xcode_config)
+        test_copier = TaskTestCopier(source_tasks_dir, xcode_config)
         test_type = test_copier.copy_task_tests(instance_id, worktree_dir)
         has_task_tests = bool(test_type)
 
@@ -495,7 +495,7 @@ def run_xcode_evals(
             iid = ps["instance_id"]
             if iid not in _has_tests_cache:
                 _has_tests_cache[iid] = (
-                    src_tasks / TestFileCopier._task_name(iid) / TESTS_FILENAME
+                    src_tasks / TaskTestCopier._task_name(iid) / TESTS_FILENAME
                 ).is_file()
 
     def _has_tests(iid: str) -> bool:
