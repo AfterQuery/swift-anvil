@@ -4,7 +4,7 @@ from __future__ import annotations
 # Simulator
 # -----------------------------------------------------------------------------
 SIMULATOR_NAME_PREFIX = "anvil-eval"
-DEFAULT_DEVICE_NAME = "iPhone 16"
+DEFAULT_DEVICE_NAME = "iPhone 17 Pro"
 
 # -----------------------------------------------------------------------------
 # Test file names

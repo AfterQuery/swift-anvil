@@ -177,6 +177,6 @@ class SimulatorPool:
 
     @staticmethod
     def _parse_device_name(test_destination: str) -> str:
-        """Parse device name from destination string. Defaults to iPhone 16."""
+        """Parse device name from destination string. Defaults to iPhone 17 Pro."""
         match = re.search(r"name=([^,]+)", test_destination)
         return match.group(1).strip() if match else DEFAULT_DEVICE_NAME
