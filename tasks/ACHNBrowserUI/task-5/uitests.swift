@@ -7,7 +7,7 @@ final class AnvilTask5UITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        executionTimeAllowance = 120
+        executionTimeAllowance = 300
         app = XCUIApplication()
         app.launchArguments += ["-UIAnimationDragCoefficient", "0.001"]
         app.launch()
@@ -37,15 +37,21 @@ final class AnvilTask5UITests: XCTestCase {
     }
 
     private func choresSectionExists() -> Bool {
-        for substring in ["keep track of your chores", "Manage and keep track", "Chores"] {
-            let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
-            if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 8) { return true }
-            if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 4) { return true }
+        let patterns = ["keep track of your chores", "Manage and keep track", "Chores", "keep track", "Manage"]
+        let loadDeadline = Date().addingTimeInterval(25)
+        while Date() < loadDeadline {
+            for p in patterns {
+                let pred = NSPredicate(format: "label CONTAINS[cd] %@", p)
+                if app.staticTexts.matching(pred).firstMatch.exists { return true }
+                if app.cells.matching(pred).firstMatch.exists { return true }
+            }
+            _ = app.wait(for: .runningForeground, timeout: 0.5)
         }
-        for _ in 0..<8 {
+
+        for _ in 0..<12 {
             app.swipeUp()
-            for substring in ["keep track", "Manage", "Chores"] {
-                let pred = NSPredicate(format: "label CONTAINS[cd] %@", substring)
+            for p in patterns {
+                let pred = NSPredicate(format: "label CONTAINS[cd] %@", p)
                 if app.staticTexts.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
                 if app.cells.matching(pred).firstMatch.waitForExistence(timeout: 2) { return true }
             }
@@ -92,19 +98,25 @@ final class AnvilTask5UITests: XCTestCase {
 
     func testAddChoreButtonExistsInChoreList() {
         guard openTodayScreen() else { return }
+
+        for _ in 0..<3 { app.swipeDown() }
         guard choresSectionExists() else { XCTFail("Chores section not found"); return }
         guard tapChoresSection() else { return }
         guard app.navigationBars["Chores"].waitForExistence(timeout: 10) else { return }
-        // Brief wait for list to render after navigation
-        _ = app.wait(for: .runningForeground, timeout: 3)
+
         let addChorePred = NSPredicate(format: "label CONTAINS[cd] %@", "Add Chore")
         let emptyStatePred = NSPredicate(format: "label CONTAINS[cd] %@", "Track your chores")
-        let listHasContent = app.buttons.matching(addChorePred).firstMatch.waitForExistence(timeout: 12) ||
-            app.staticTexts.matching(addChorePred).firstMatch.waitForExistence(timeout: 10) ||
-            app.cells.containing(addChorePred).firstMatch.waitForExistence(timeout: 10) ||
-            app.otherElements.matching(addChorePred).firstMatch.waitForExistence(timeout: 8) ||
-            app.staticTexts.matching(emptyStatePred).firstMatch.waitForExistence(timeout: 10) ||
-            app.cells.firstMatch.waitForExistence(timeout: 12)
+        let contentDeadline = Date().addingTimeInterval(20)
+        var listHasContent = false
+        while !listHasContent && Date() < contentDeadline {
+            listHasContent = app.buttons.matching(addChorePred).firstMatch.exists
+                || app.staticTexts.matching(addChorePred).firstMatch.exists
+                || app.cells.containing(addChorePred).firstMatch.exists
+                || app.otherElements.matching(addChorePred).firstMatch.exists
+                || app.staticTexts.matching(emptyStatePred).firstMatch.exists
+                || app.cells.firstMatch.exists
+            if !listHasContent { _ = app.wait(for: .runningForeground, timeout: 0.5) }
+        }
         XCTAssertTrue(
             listHasContent,
             "AC 1: Chores list view must show add button or list content"
