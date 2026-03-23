@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 import typer
 
@@ -15,7 +15,7 @@ def run_evals(
     ),
     dataset: str = typer.Option(..., "--dataset", help="Dataset ID or path"),
     agent: Annotated[
-        Literal["mini-swe-agent", "oracle"],
+        str,
         typer.Option("--agent", help="Agent to use for evaluation (oracle runs golden patches)"),
     ] = "mini-swe-agent",
     n_attempts: Annotated[
@@ -54,18 +54,11 @@ def run_evals(
     dockerhub_repo: str = typer.Option(
         "", "--dockerhub-repo", help="DockerHub repo name"
     ),
-    eval_backend: Annotated[
-        Literal["xcode", "modal"],
-        typer.Option(
-            "--eval-backend",
-            help="Evaluation backend: 'xcode' (local macOS xcodebuild) or 'modal' (Linux Docker via Modal)",
-        ),
-    ] = "xcode",
     compile_only: Annotated[
         bool,
         typer.Option(
             "--compile-only",
-            help="(xcode backend) Only check compilation, skip tests",
+            help="Only check compilation, skip tests",
         ),
     ] = False,
     rollout_only: Annotated[
@@ -86,9 +79,6 @@ def run_evals(
 ) -> None:
     """Run evaluation with an agent on a dataset."""
     dockerhub_username, dockerhub_repo = resolve_registry_env(dockerhub_username, dockerhub_repo)
-    if eval_backend == "modal" and not dockerhub_username:
-        typer.echo("Docker Hub username required for modal backend. Set REGISTRY_USERNAME in .env or pass -u.", err=True)
-        raise typer.Exit(1)
 
     from .evals import run_evaluation
 
@@ -103,7 +93,6 @@ def run_evals(
         max_wait_minutes=max_wait,
         max_parallel=max_parallel,
         no_continue=no_continue,
-        eval_backend=eval_backend,
         compile_only=compile_only,
         rollout_only=rollout_only,
         task_filter=task,

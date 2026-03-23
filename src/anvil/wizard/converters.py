@@ -3,25 +3,15 @@
 Converts task directories to Anvil's evaluation format which includes:
 - instances.yaml - List of instances for run-evals
 - gold_patches.json - Reference patches for oracle evaluation
-- tasks.csv - Combined CSV of all tasks
-- dockerfiles/ - Docker image definitions (Modal backend only)
-- run_scripts/ - Test execution scripts (Modal backend only)
+- dockerfiles/ - Docker image definitions
 
-Supports two task directory layouts:
-
-Docker/Modal layout (instance_info.txt + tasks.csv + task_tests.py):
-    task-N/instance_info.txt, task-N/tasks.csv, task-N/task_tests.py
-
-Xcode layout (metadata.yaml + task-N/ directories):
+Task directory layout (Xcode):
     metadata.yaml (base_commits for all tasks)
     task-N/problem.md, task-N/solution.diff, task-N/tests.swift
 """
 
 from __future__ import annotations
 
-import ast
-import csv
-import io
 import json
 import shutil
 import subprocess
@@ -37,93 +27,6 @@ from ..evals.xcode_cache import load_xcode_config
 from ..util import resolve_dataset_path, resolve_registry_env
 from ..warm_cache import warm_xcode_cache_for_instances
 from .models import Task, TestSpec
-
-
-def _parse_instance_info(instance_info_path: Path) -> dict:
-    """Parse instance_info.txt file."""
-    content = instance_info_path.read_text()
-    result = {}
-
-    for line in content.strip().split("\n"):
-        if ": " in line:
-            key, value = line.split(": ", 1)
-            key = key.strip().lower().replace(" ", "_")
-            result[key] = value.strip()
-
-    return result
-
-
-def _parse_tasks_csv(csv_path: Path) -> dict:
-    """Parse tasks.csv file and return the first data row as dict."""
-    csv.field_size_limit(1_000_000)
-    content = csv_path.read_text()
-    reader = csv.DictReader(io.StringIO(content))
-    for row in reader:
-        return dict(row)
-    return {}
-
-
-def load_task_from_directory(task_dir: Path) -> Task | None:
-    """Load a Task from a task directory.
-
-    Expected files:
-    - instance_info.txt
-    - tasks.csv
-    - task_tests.py
-    """
-    instance_info_path = task_dir / "instance_info.txt"
-    tasks_csv_path = task_dir / "tasks.csv"
-    tests_path = task_dir / "task_tests.py"
-
-    if not all(p.exists() for p in [instance_info_path, tasks_csv_path, tests_path]):
-        return None
-
-    instance_info = _parse_instance_info(instance_info_path)
-    csv_data = _parse_tasks_csv(tasks_csv_path)
-
-    # Parse fail_to_pass and pass_to_pass from instance_info
-    fail_to_pass = []
-    pass_to_pass = []
-
-    fail_str = instance_info.get("fail_to_pass", "[]")
-    pass_str = instance_info.get("pass_to_pass", "[]")
-
-    try:
-        fail_to_pass = ast.literal_eval(fail_str) if fail_str else []
-    except Exception as e:
-        print(
-            f"Warning: Failed to parse fail_to_pass in {task_dir.name}: {e}",
-            file=sys.stderr,
-        )
-        fail_to_pass = []
-
-    try:
-        pass_to_pass = ast.literal_eval(pass_str) if pass_str else []
-    except Exception as e:
-        print(
-            f"Warning: Failed to parse pass_to_pass in {task_dir.name}: {e}",
-            file=sys.stderr,
-        )
-        pass_to_pass = []
-
-    return Task(
-        task_id=task_dir.name,
-        instance_id=instance_info.get(
-            "instance_id", f"{task_dir.parent.name}.{task_dir.name}"
-        ),
-        problem_statement=csv_data.get("problem_statement", ""),
-        patch=csv_data.get("patch", ""),
-        test_code=tests_path.read_text(),
-        test_spec=TestSpec(fail_to_pass=fail_to_pass, pass_to_pass=pass_to_pass),
-        base_commit=csv_data.get("base_commit", ""),
-        repo=csv_data.get("repo", ""),
-        language=csv_data.get("repo_language", "Python"),
-        before_repo_set_cmd=csv_data.get("before_repo_set_cmd", ""),
-        requirements=csv_data.get("requirements", ""),
-        interface=csv_data.get("interface", ""),
-        issue_specificity=csv_data.get("issue_specificity", ""),
-        issue_categories=csv_data.get("issue_categories", ""),
-    )
 
 
 def _load_xcode_task(task_dir: Path, repo_name: str, base_commit: str) -> Task | None:
@@ -156,8 +59,7 @@ def _load_base_commits(dataset_path: Path) -> dict[str, str]:
           task-1: abc123...
           task-2: def456...
 
-    Returns a dict keyed by task directory name (e.g. ``{"task-1": "abc..."}``).
-    """
+    Returns a dict keyed by task directory name (e.g. ``{"task-1": "abc..."}``)."""
     meta_path = dataset_path / "metadata.yaml"
     if not meta_path.exists():
         return {}
@@ -167,32 +69,19 @@ def _load_base_commits(dataset_path: Path) -> dict[str, str]:
 
 
 def load_all_tasks(dataset_path: Path) -> list[Task]:
-    """Load all tasks from a dataset directory.
+    """Load all tasks from an Xcode-format dataset directory.
 
-    Tries the Docker/Modal format first (instance_info.txt + tasks.csv +
-    task_tests.py).  Falls back to the Xcode format (problem.md +
-    solution.diff) with base commits from the root ``metadata.yaml``.
+    Each task-N/ must have problem.md and solution.diff.
+    Base commits come from the root metadata.yaml.
     """
-    tasks = []
-
     task_dirs = sorted(
         [d for d in dataset_path.iterdir() if d.is_dir() and d.name.startswith("task-")],
         key=lambda d: d.name,
     )
 
-    # Try Docker/Modal format first
-    for item in task_dirs:
-        task = load_task_from_directory(item)
-        if task:
-            tasks.append(task)
-
-    if tasks:
-        return tasks
-
-    # Xcode format: each task-N/ has problem.md, solution.diff
-    # Base commits come from the root metadata.yaml
     repo_name = dataset_path.name
     base_commits = _load_base_commits(dataset_path)
+    tasks = []
 
     for item in task_dirs:
         base_commit = base_commits.get(item.name, "")
@@ -251,55 +140,6 @@ def generate_gold_patches_json(tasks: list[Task]) -> str:
     return json.dumps(patches, indent=2)
 
 
-def generate_combined_tasks_csv(tasks: list[Task]) -> str:
-    """Generate combined tasks.csv with all tasks."""
-    output = io.StringIO()
-    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
-
-    # Header
-    header = [
-        "repo",
-        "instance_id",
-        "base_commit",
-        "patch",
-        "test_patch",
-        "problem_statement",
-        "requirements",
-        "interface",
-        "repo_language",
-        "fail_to_pass",
-        "pass_to_pass",
-        "issue_specificity",
-        "issue_categories",
-        "before_repo_set_cmd",
-        "selected_test_files_to_run",
-    ]
-    writer.writerow(header)
-
-    # Data rows
-    for task in tasks:
-        row = [
-            task.repo,
-            task.instance_id,
-            task.base_commit,
-            task.patch,
-            "",  # test_patch
-            task.problem_statement,
-            task.requirements,
-            task.interface,
-            task.language,
-            str(task.test_spec.fail_to_pass),
-            str(task.test_spec.pass_to_pass),
-            task.issue_specificity,
-            task.issue_categories,
-            task.before_repo_set_cmd,
-            str([f"tasks/{task.task_id}/task_tests.py"]),
-        ]
-        writer.writerow(row)
-
-    return output.getvalue()
-
-
 def convert_to_anvil_structure(
     dataset_path: Path,
     output_path: Path,
@@ -308,7 +148,6 @@ def convert_to_anvil_structure(
 ) -> tuple[dict[str, list[Path]], list[Task]]:
     """Convert a task directory to Anvil evaluation format.
 
-    Handles both Docker/Modal datasets and Xcode datasets.
     Returns dict of created file paths by category.
     """
     tasks = load_all_tasks(dataset_path)
@@ -317,17 +156,14 @@ def convert_to_anvil_structure(
         raise ValueError(f"No tasks found in {dataset_path}")
 
     project_name = tasks[0].instance_id.partition(".")[0]
-    has_docker = (dataset_path / "Dockerfile").exists()
 
     created_files: dict[str, list[Path]] = {
         "config": [],
         "dockerfiles": [],
-        "run_scripts": [],
     }
 
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # --- Shared Docker directory layout ---
     dockerfiles_base_dir = (
         output_path / "dockerfiles" / "docker_image_creation" / project_name
     )
@@ -342,79 +178,54 @@ def convert_to_anvil_structure(
 
     base_image_tag = f"{dockerhub_username}/{dockerhub_repo}:{project_name}.base"
 
-    # --- Base Dockerfiles ---
-    if has_docker:
-        run_scripts_dir = output_path / "run_scripts"
-        run_scripts_dir.mkdir(parents=True, exist_ok=True)
+    # Base Dockerfile from repo
+    repo_source = repo_root() / "repos" / project_name
+    if repo_source.is_dir():
+        remote_url = ""
+        try:
+            result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                cwd=str(repo_source), capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                remote_url = result.stdout.strip()
+        except FileNotFoundError:
+            pass
 
-        base_dockerfile = dataset_path / "Dockerfile"
+        if remote_url:
+            base_dockerfile_content = (
+                "FROM ubuntu:24.04\n"
+                "RUN apt-get update && apt-get install -y git python3 python3-pip && rm -rf /var/lib/apt/lists/*\n"
+                f"RUN git clone {remote_url} /app\n"
+                "WORKDIR /app\n"
+            )
+        else:
+            base_dockerfile_content = (
+                "FROM ubuntu:24.04\n"
+                "RUN apt-get update && apt-get install -y git python3 python3-pip && rm -rf /var/lib/apt/lists/*\n"
+                "WORKDIR /app\n"
+                "COPY . .\n"
+                "RUN git init\n"
+            )
+
         for dest_dir in [dockerfiles_base_dir, dockerfiles_base_dockerfile_dir]:
             dest = dest_dir / "Dockerfile"
-            shutil.copy(base_dockerfile, dest)
+            dest.write_text(base_dockerfile_content)
             created_files["dockerfiles"].append(dest)
 
-        requirements_txt = dataset_path / "requirements.txt"
-        if requirements_txt.exists():
-            dest_req = dockerfiles_base_dir / "requirements.txt"
-            shutil.copy(requirements_txt, dest_req)
-            created_files["dockerfiles"].append(dest_req)
+        if not remote_url:
+            shutil.copytree(
+                repo_source, dockerfiles_base_dir,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(".git"),
+            )
 
-        repo_dir = dataset_path / project_name
-        if repo_dir.is_dir():
-            shutil.copytree(repo_dir, dockerfiles_base_dir, dirs_exist_ok=True)
-    else:
-        repo_source = repo_root() / "repos" / project_name
-
-        if repo_source.is_dir():
-            remote_url = ""
-            try:
-                result = subprocess.run(
-                    ["git", "remote", "get-url", "origin"],
-                    cwd=str(repo_source), capture_output=True, text=True,
-                )
-                if result.returncode == 0:
-                    remote_url = result.stdout.strip()
-            except FileNotFoundError:
-                pass
-
-            if remote_url:
-                base_dockerfile_content = (
-                    "FROM ubuntu:24.04\n"
-                    "RUN apt-get update && apt-get install -y git python3 python3-pip && rm -rf /var/lib/apt/lists/*\n"
-                    f"RUN git clone {remote_url} /app\n"
-                    "WORKDIR /app\n"
-                )
-            else:
-                base_dockerfile_content = (
-                    "FROM ubuntu:24.04\n"
-                    "RUN apt-get update && apt-get install -y git python3 python3-pip && rm -rf /var/lib/apt/lists/*\n"
-                    "WORKDIR /app\n"
-                    "COPY . .\n"
-                    "RUN git init\n"
-                )
-
-            for dest_dir in [dockerfiles_base_dir, dockerfiles_base_dockerfile_dir]:
-                dest = dest_dir / "Dockerfile"
-                dest.write_text(base_dockerfile_content)
-                created_files["dockerfiles"].append(dest)
-
-            if not remote_url:
-                shutil.copytree(
-                    repo_source, dockerfiles_base_dir,
-                    dirs_exist_ok=True,
-                    ignore=shutil.ignore_patterns(".git"),
-                )
-
-    # --- Per-instance Dockerfiles ---
+    # Per-instance Dockerfiles
     for task in tasks:
         instance_docker_dir = dockerfiles_instance_dir / task.instance_id
         instance_docker_dir.mkdir(parents=True, exist_ok=True)
 
-        task_dockerfile = dataset_path / task.task_id / "Dockerfile"
-        if has_docker and task_dockerfile.exists():
-            content = task_dockerfile.read_text()
-        else:
-            content = f"FROM {base_image_tag}\nWORKDIR /app\n"
+        content = f"FROM {base_image_tag}\nWORKDIR /app\n"
         if task.base_commit:
             content += f"RUN git reset --hard {task.base_commit}\n"
 
@@ -422,29 +233,8 @@ def convert_to_anvil_structure(
         dest.write_text(content)
         created_files["dockerfiles"].append(dest)
 
-    # --- Per-task run scripts (Docker/Modal only) ---
-    if has_docker:
-        for task in tasks:
-            instance_scripts_dir = run_scripts_dir / task.instance_id
-            instance_scripts_dir.mkdir(parents=True, exist_ok=True)
-
-            for filename, make_executable in [
-                ("run_script.sh", True),
-                ("parser.py", False),
-                ("instance_info.txt", False),
-            ]:
-                src = dataset_path / task.task_id / filename
-                if src.exists():
-                    dest = instance_scripts_dir / filename
-                    shutil.copy(src, dest)
-                    if make_executable:
-                        dest.chmod(0o755)
-                    created_files["run_scripts"].append(dest)
-
-    # --- Config files (always generated) ---
-    instances_yaml = generate_instances_yaml(
-        tasks, dockerhub_username, dockerhub_repo
-    )
+    # Config files
+    instances_yaml = generate_instances_yaml(tasks, dockerhub_username, dockerhub_repo)
     instances_path = output_path / "instances.yaml"
     instances_path.write_text(instances_yaml)
     created_files["config"].append(instances_path)
@@ -453,11 +243,6 @@ def convert_to_anvil_structure(
     gold_patches_path = output_path / "gold_patches.json"
     gold_patches_path.write_text(gold_patches)
     created_files["config"].append(gold_patches_path)
-
-    tasks_csv = generate_combined_tasks_csv(tasks)
-    tasks_csv_path = output_path / "tasks.csv"
-    tasks_csv_path.write_text(tasks_csv)
-    created_files["config"].append(tasks_csv_path)
 
     return created_files, tasks
 
@@ -489,9 +274,6 @@ def convert_dataset(
         )
         raise typer.Exit(1)
 
-    # Determine output directory.
-    # Default: datasets/<name>/tasks/ so downstream commands use
-    # --dataset datasets/<name> and tasks_dir() finds instances.yaml.
     if output_dir:
         output_path = output_dir
     else:
@@ -511,7 +293,6 @@ def convert_dataset(
         typer.secho(f"Error: {e}", fg=typer.colors.RED)
         raise typer.Exit(1)
 
-    # Summary
     typer.secho("\nConversion completed successfully!", fg=typer.colors.GREEN)
 
     typer.echo("\nCreated files:")
@@ -521,8 +302,6 @@ def convert_dataset(
 
     if created_files["dockerfiles"]:
         typer.echo(f"  Dockerfiles: {len(created_files['dockerfiles'])} files")
-    if created_files["run_scripts"]:
-        typer.echo(f"  Run scripts: {len(created_files['run_scripts'])} files")
 
     dataset_name = dataset_path.name
     ds_path = f"datasets/{dataset_name}"
@@ -544,10 +323,6 @@ def convert_dataset(
             typer.echo(f"  Cache warming failed: {e}", err=True)
 
     typer.echo("\nNext steps:")
-    if has_xcode_config:
-        typer.echo(f"  1. Oracle eval:     anvil run-evals --dataset {ds_path} --agent oracle --compile-only")
-        typer.echo(f"  2. Publish images:  anvil publish-images --dataset {ds_path}")
-        typer.echo(f"  3. Agent eval:      anvil run-evals --dataset {ds_path} --agent mini-swe-agent --model <model> --compile-only")
-    else:
-        typer.echo(f"  1. Publish images:  anvil publish-images --dataset {ds_path}")
-        typer.echo(f"  2. Run evaluation:  anvil run-evals --dataset {ds_path} --agent oracle")
+    typer.echo(f"  1. Oracle eval:     anvil run-evals --dataset {ds_path} --agent oracle --compile-only")
+    typer.echo(f"  2. Publish images:  anvil publish-images --dataset {ds_path}")
+    typer.echo(f"  3. Agent eval:      anvil run-evals --dataset {ds_path} --agent mini-swe-agent --model <model> --compile-only")

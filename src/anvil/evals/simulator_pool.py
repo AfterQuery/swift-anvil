@@ -73,19 +73,22 @@ def prewarm_app_binary(xcode_config: dict, products_dir: Path) -> None:
         return
 
     logger.info("Pre-warming app %s on simulator %s", bundle_id, sim_udid)
-    subprocess.run(
-        ["xcrun", "simctl", "launch", sim_udid, bundle_id],
-        capture_output=True,
-        text=True,
-        timeout=20,
-    )
-    time.sleep(2)
-    subprocess.run(
-        ["xcrun", "simctl", "terminate", sim_udid, bundle_id],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
+    try:
+        subprocess.run(
+            ["xcrun", "simctl", "launch", sim_udid, bundle_id],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        time.sleep(2)
+        subprocess.run(
+            ["xcrun", "simctl", "terminate", sim_udid, bundle_id],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning("Pre-warm timed out for %s on %s — continuing without prewarm", bundle_id, sim_udid)
 
 
 class SimulatorPool:

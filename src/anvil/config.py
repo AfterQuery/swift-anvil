@@ -39,11 +39,6 @@ def source_tasks_dir(dataset_id: str) -> Path:
     return repo_root() / "tasks" / project_name
 
 
-def swe_bench_eval_script() -> Path:
-    """Return the path to the SWE-bench Pro evaluation script."""
-    return Path(__file__).parent / "_vendor" / "swe_bench_pro" / "swe_bench_pro_eval.py"
-
-
 def swe_agent_dir() -> Path:
     """Path to SWE-agent submodule (if present)."""
     return repo_root() / "SWE-agent"

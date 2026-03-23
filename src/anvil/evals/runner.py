@@ -9,7 +9,6 @@ import asyncio
 import json
 import os
 import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -25,7 +24,7 @@ from ..agents.harness import (
     run_agent_in_modal,
     write_single_result,
 )
-from ..config import eval_dir, swe_bench_eval_script, tasks_dir
+from ..config import eval_dir, tasks_dir
 from ..util import ensure_dir, model_id_from_model, provider_env_var_from_model
 from .pass_at_k import (
     compute_pass_at_k_summary,
@@ -147,7 +146,6 @@ def run_evaluation(
     max_wait_minutes: int | None = None,
     max_parallel: int = 30,
     no_continue: bool = False,
-    eval_backend: str = "xcode",
     compile_only: bool = False,
     rollout_only: bool = False,
     task_filter: list[str] | None = None,
@@ -166,11 +164,10 @@ def run_evaluation(
         typer.echo("Error: --model is required for non-oracle agents")
         return 1
 
-    # Validate registry credentials upfront - required for Modal-based runs
+    # Validate registry credentials upfront - required for agent runs
     reg_user = os.environ.get("REGISTRY_USERNAME")
     reg_pass = os.environ.get("REGISTRY_PASSWORD")
-    needs_registry = eval_backend == "modal" or agent != "oracle"
-    if needs_registry and (not reg_user or not reg_pass):
+    if agent != "oracle" and (not reg_user or not reg_pass):
         typer.echo("Error: REGISTRY_USERNAME and REGISTRY_PASSWORD must be set")
         typer.echo("")
         typer.echo("These credentials are required to pull Docker images from Docker Hub.")
@@ -381,50 +378,20 @@ def run_evaluation(
         typer.echo(eval_status)
 
     if all_patches:
-        if eval_backend == "xcode":
-            from .xcode_eval import run_xcode_evals
+        from .xcode_eval import run_xcode_evals
 
-            eval_start = time.time()
-            run_xcode_evals(
-                patches=all_patches,
-                instances=instances,
-                dataset_tasks_dir=dataset_tasks_dir,
-                output_dir=base_out,
-                eval_id=eval_id,
-                compile_only=compile_only,
-                dataset_id=dataset_id,
-            )
-            eval_elapsed = time.time() - eval_start
-            typer.echo(f"Xcode evals complete in {_fmt_s(eval_elapsed)}")
-        else:
-            patches_file = base_out / f"{eval_id}_all_patches.json"
-            patches_file.write_text(json.dumps(all_patches, indent=2))
-
-            eval_workers = min(len(all_patches), max_parallel)
-
-            cmd = [
-                "uv",
-                "run",
-                str(swe_bench_eval_script()),
-                f"--raw_sample_path={dataset_tasks_dir / 'tasks.csv'}",
-                f"--patch_path={patches_file}",
-                f"--output_dir={base_out}",
-                f"--scripts_dir={ensure_dir(dataset_tasks_dir / 'run_scripts')}",
-                f"--num_workers={eval_workers}",
-                f"--dockerhub_username={dockerhub_username}",
-                f"--dockerhub_repo={dockerhub_repo}",
-            ]
-
-            result = subprocess.run(
-                cmd,
-                cwd=str(dataset_tasks_dir),
-                env=os.environ.copy(),
-            )
-
-            patches_file.unlink(missing_ok=True)
-
-            if result.returncode != 0:
-                return 1
+        eval_start = time.time()
+        run_xcode_evals(
+            patches=all_patches,
+            instances=instances,
+            dataset_tasks_dir=dataset_tasks_dir,
+            output_dir=base_out,
+            eval_id=eval_id,
+            compile_only=compile_only,
+            dataset_id=dataset_id,
+        )
+        eval_elapsed = time.time() - eval_start
+        typer.echo(f"Xcode evals complete in {_fmt_s(eval_elapsed)}")
 
     # ---- Aggregate Results ----
     results_file = base_out / "eval_results.json"

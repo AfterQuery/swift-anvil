@@ -20,6 +20,7 @@ test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
 # Tests using `@testable import AC_Helper` are automatically routed here.
 # The harness programmatically injects the test target into project.pbxproj.
 # Note: The app's Swift module name is AC_Helper (from PRODUCT_NAME = "AC Helper").
+app_test_scheme: ACHNBrowserUI
 app_test_target: ACHNBrowserUITests
 app_test_files_dest: ACHNBrowserUI/ACHNBrowserUITests
 app_test_module: AC_Helper
