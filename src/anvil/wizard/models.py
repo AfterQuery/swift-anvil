@@ -2,15 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
-
-@dataclass
-class TestSpec:
-    """Specification for test expectations."""
-
-    fail_to_pass: list[str] = field(default_factory=list)
-    pass_to_pass: list[str] = field(default_factory=list)
+from dataclasses import dataclass
 
 
 @dataclass
@@ -22,7 +14,6 @@ class Task:
     problem_statement: str
     patch: str
     test_code: str
-    test_spec: TestSpec
     base_commit: str
     repo: str
     language: str = "Swift"

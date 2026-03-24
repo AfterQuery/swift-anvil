@@ -26,7 +26,7 @@ from ..config import repo_root
 from ..evals.xcode_cache import load_xcode_config
 from ..util import resolve_dataset_path, resolve_registry_env
 from ..warm_cache import warm_xcode_cache_for_instances
-from .models import Task, TestSpec
+from .models import Task
 
 
 def _load_xcode_task(task_dir: Path, repo_name: str, base_commit: str) -> Task | None:
@@ -43,7 +43,6 @@ def _load_xcode_task(task_dir: Path, repo_name: str, base_commit: str) -> Task |
         problem_statement=problem_path.read_text(),
         patch=solution_path.read_text(),
         test_code="",
-        test_spec=TestSpec(),
         base_commit=base_commit,
         repo=repo_name,
         language="Swift",

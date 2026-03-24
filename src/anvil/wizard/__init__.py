@@ -1,10 +1,9 @@
 """Task creation wizard for Anvil."""
 
 from .converters import convert_dataset
-from .models import Task, TestSpec
+from .models import Task
 
 __all__ = [
     "Task",
-    "TestSpec",
     "convert_dataset",
 ]
