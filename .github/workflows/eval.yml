@@ -1,5 +1,5 @@
 name: Anvil Eval
-run-name: "${{ inputs.agent }} · ${{ inputs.dataset }} · ${{ inputs.model }} · k=${{ inputs.n_attempts }}"
+run-name: "${{ inputs.agent }} · ${{ inputs.dataset }} · ${{ inputs.model }} · k=${{ inputs.n_attempts }} · ${{ inputs.no_ui_tests && 'unit-only' || 'ut+ui' }}"
 
 on:
   workflow_dispatch:
@@ -40,6 +40,11 @@ on:
         required: true
         type: number
         default: 4
+      no_ui_tests:
+        description: "Unit tests only (skip XCTest UI tests; run dir gets _unit-only suffix)"
+        required: false
+        type: boolean
+        default: false
 
 env:
   DATASET_PATH: "datasets/${{ inputs.dataset }}"
@@ -135,11 +140,17 @@ jobs:
             MODEL_ARGS="--model ${{ inputs.model }}"
           fi
 
+          NO_UI_ARGS=""
+          if [ "${{ inputs.no_ui_tests }}" = "true" ]; then
+            NO_UI_ARGS="--no-ui-tests"
+          fi
+
           uv run anvil run-evals \
             --dataset "${{ env.DATASET_PATH }}" \
             $MODEL_ARGS \
             $AGENT_ARGS \
-            --n-attempts "${{ inputs.n_attempts }}"
+            --n-attempts "${{ inputs.n_attempts }}" \
+            $NO_UI_ARGS
 
       - name: Commit results
         if: always()

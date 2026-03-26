@@ -105,7 +105,7 @@ anvil publish-images --dataset datasets/ACHNBrowserUI
 
 4. Run against models
 
-By default, `run-evals` runs **unit tests** (`tests.swift`) and **UI tests** (`uitests.swift`) when a task has both. Append **`--no-ui-tests`** to any command below to evaluate **unit tests only** (skips UI tests).
+By default, `run-evals` runs **unit tests** (`tests.swift`) and **UI tests** (`uitests.swift`) when a task has both. Append **`--no-ui-tests`** to any command below to evaluate **unit tests only** (skips UI tests). With `--no-ui-tests`, results go under `runs/<agent>_<model>_unit-only/` instead of `runs/<agent>_<model>/`.
 
 ```bash
 anvil run-evals --dataset datasets/ACHNBrowserUI --agent mini-swe-agent --model openrouter/anthropic/claude-opus-4.6 --n-attempts 4 --no-continue

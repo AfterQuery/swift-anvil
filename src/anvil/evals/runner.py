@@ -38,13 +38,16 @@ def _fmt_s(seconds: float) -> str:
     return f"{seconds:.0f}s ({seconds / 60:.1f}m)"
 
 
-def _eval_id(agent: str, model: str) -> str:
-    """Compose eval_id as '<agent>_<model-suffix>'."""
-    # Oracle agent doesn't use a model
+def _eval_id(agent: str, model: str, *, run_ui_tests: bool = True) -> str:
+    """Compose eval_id as '<agent>_<model-suffix>', optional '_unit-only' when UI tests are off."""
     if agent == "oracle":
-        return agent
-    base = model_id_from_model(model)
-    return f"{agent}_{base}" if agent else base
+        base = agent
+    else:
+        mid = model_id_from_model(model)
+        base = f"{agent}_{mid}" if agent else mid
+    if not run_ui_tests:
+        base = f"{base}_unit-only"
+    return base
 
 
 def _get_completed_attempts(
@@ -190,7 +193,7 @@ def run_evaluation(
         max_wait_minutes = max(10, 10 * k // 2)
 
     start_time = time.time()
-    eval_id = _eval_id(agent, model)
+    eval_id = _eval_id(agent, model, run_ui_tests=run_ui_tests)
     base_out_path = Path(output) if output else eval_dir(dataset_id, eval_id)
     
     # Handle --no-continue: delete existing results directory

@@ -81,9 +81,9 @@ anvil run-evals \
   --n-attempts 4
 ```
 
-By default each eval runs **unit tests** (`tests.swift`) and then **UI tests** (`uitests.swift`) when the task provides them. Pass **`--no-ui-tests`** to evaluate with unit tests only (skips copying and running UI tests).
+By default each eval runs **unit tests** (`tests.swift`) and then **UI tests** (`uitests.swift`) when the task provides them. Pass **`--no-ui-tests`** to evaluate with unit tests only (skips copying and running UI tests). The run directory name gains a **`_unit-only`** suffix when `--no-ui-tests` is set (e.g. `mini-swe-agent_claude-sonnet-4.6_unit-only`), so full vs unit-only runs do not share the same folder.
 
-Use `--n-attempts` to control how many runs per task (useful for pass@k metrics). Results are saved to `<dataset>/runs/<agent>_<model>/`.
+Use `--n-attempts` to control how many runs per task (useful for pass@k metrics). Results are saved to `<dataset>/runs/<agent>_<model>/` (or `…_unit-only`).
 
 > 💡 **Progress is saved automatically** to minimize costs. If you re-run the same command, completed tasks are skipped. Use `--no-continue` to start fresh.
 
