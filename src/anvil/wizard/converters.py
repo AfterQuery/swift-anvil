@@ -38,14 +38,11 @@ def _load_xcode_task(task_dir: Path, repo_name: str, base_commit: str) -> Task |
         return None
 
     return Task(
-        task_id=task_dir.name,
         instance_id=f"{repo_name}.{task_dir.name}",
         problem_statement=problem_path.read_text(),
         patch=solution_path.read_text(),
-        test_code="",
         base_commit=base_commit,
         repo=repo_name,
-        language="Swift",
     )
 
 

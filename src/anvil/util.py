@@ -6,7 +6,6 @@ from pathlib import Path
 import typer
 
 DEFAULT_REGISTRY_REPO = "anvil-images"
-DEFAULT_DOCKERHUB_USERNAME = "afterquery"
 
 
 def run(
