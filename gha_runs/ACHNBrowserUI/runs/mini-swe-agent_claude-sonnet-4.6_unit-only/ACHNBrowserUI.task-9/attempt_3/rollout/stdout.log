@@ -1,0 +1,2893 @@
+HEAD is now at d01e435 Show/Hide Finished Chores (#241)
+Looking in links: /tmp/tmps45udius
+Requirement already satisfied: pip in /usr/local/lib/python3.12/site-packages (23.3.2)
+👋 This is mini-swe-agent version 2.2.8.
+Check the v2 migration guide at https://klieret.short.gy/mini-v2-migration
+Loading global config from '/root/.config/mini-swe-agent/.env'
+Building agent config from specs: ['mini.yaml', '/tmp/anvil_override.yaml']
+
+System:
+You are a helpful assistant that can interact with a computer.
+
+User:
+Please solve this issue: ## Feature: Track today's villager visits on the 
+Dashboard
+
+### Problem Description
+
+In **ACHNBrowserUI**, the Today Dashboard can track custom chores and daily 
+tasks, but it has no way to track player interactions with island residents. In 
+Animal Crossing, players can gift each of their 10 villagers once per day. There
+is currently no in-app way to record which residents have been visited or gifted
+today.
+
+Villagers that the user has marked as residents (via the Home button on the 
+villager detail view) should automatically appear in a new "Villager Visits" 
+section of the Today Dashboard. The user can then check off each resident after 
+visiting or gifting them, and reset the section at the start of a new day — 
+exactly mirroring how the Custom Chores section works.
+
+### Acceptance Criteria
+
+1. A new `TodaySection.Name.villagerVisits` section type must be added and 
+included in the default section list.
+2. `UserCollection` must track which resident villagers have been visited today 
+via a `visitedResidents` property, support toggling a villager's visited state, 
+and support resetting all visited states. Note: the section is named "Villager 
+Visits" but the `UserCollection` API uses "resident" terminology — do not name 
+the properties `villagerVisits`, `toggleVillagerVisit`, or 
+`resetVillagerVisits`.
+3. A long-press on a villager in the visits section must open the villager 
+detail view so the player can check gift preferences.
+4. The section must hide the reset button when no villagers have been visited 
+yet.
+5. German localization strings must be provided for the new section title.
+6. Existing Today Dashboard sections (daily tasks, chores, etc.) must remain 
+unchanged.
+
+### Required API Surface
+
+- `TodaySection.Name.villagerVisits`
+- `UserCollection.visitedResidents: [Villager]`
+- `UserCollection.toggleVisitedResident(villager:)`
+- `UserCollection.resetVisitedResidents()`
+
+
+## Important constraints
+- Do NOT create, modify, or delete any test files or test cases. The existing 
+test suite will be used to verify your implementation.
+
+## Efficiency constraint
+Start implementing changes within the first 5-8 steps. Keep analysis brief; 
+prefer quick exploration followed by edits.
+
+
+You can execute bash commands and edit files to implement the necessary changes.
+
+## Recommended Workflow
+
+This workflow should be done step-by-step so that you can iterate on your 
+changes and any possible problems.
+
+1. Analyze the codebase by finding and reading relevant files
+2. Create a script to reproduce the issue
+3. Edit the source code to resolve the issue
+4. Verify your fix works by running your script again
+5. Test edge cases to ensure your fix is robust
+6. Submit your changes and finish your work by issuing the following command: 
+`echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
+   Do not combine it with any other command. <important>After this command, you 
+cannot continue working on this task.</important>
+
+## Command Execution Rules
+
+You are operating in an environment where
+
+1. You issue at least one command
+2. The system executes the command(s) in a subshell
+3. You see the result(s)
+4. You write your next command(s)
+
+Each response should include:
+
+1. **Reasoning text** where you explain your analysis and plan
+2. At least one tool call with your command
+
+**CRITICAL REQUIREMENTS:**
+
+- Your response SHOULD include reasoning text explaining what you're doing
+- Your response MUST include AT LEAST ONE bash tool call
+- Directory or environment variable changes are not persistent. Every action is 
+executed in a new subshell.
+- However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd 
+/path/to/working/dir && ...` or write/load environment variables from files
+- Submit your changes and finish your work by issuing the following command: 
+`echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
+  Do not combine it with any other command. <important>After this command, you 
+cannot continue working on this task.</important>
+
+Example of a CORRECT response:
+<example_response>
+I need to understand the structure of the repository first. Let me check what 
+files are in the current directory to get a better understanding of the 
+codebase.
+
+[Makes bash tool call with {"command": "ls -la"} as arguments]
+</example_response>
+
+<system_information>
+Linux 4.4.0 #1 SMP Sun Jan 10 15:06:54 PST 2016 x86_64
+</system_information>
+
+## Useful command examples
+
+### Create a new file:
+
+```bash
+cat <<'EOF' > newfile.py
+import numpy as np
+hello = "world"
+print(hello)
+EOF
+```
+
+### Edit files with sed:```bash
+# Replace all occurrences
+sed -i 's/old_string/new_string/g' filename.py
+
+# Replace only first occurrence
+sed -i 's/old_string/new_string/' filename.py
+
+# Replace first occurrence on line 1
+sed -i '1s/old_string/new_string/' filename.py
+
+# Replace all occurrences in lines 1-10
+sed -i '1,10s/old_string/new_string/g' filename.py
+```
+
+### View file content:
+
+```bash
+# View specific lines with numbers
+nl -ba filename.py | sed -n '10,20p'
+```
+
+### Any other command you want to run
+
+```bash
+anything
+```
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 1, $0.01):
+I'll start by exploring the codebase to understand the structure and find 
+relevant files.
+
+```
+find /root -type f -name "*.swift" | head -50 && echo "---" && ls /root
+```
+
+Tool:
+<returncode>
+0
+<output>
+---
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 2, $0.01):
+```
+find / -maxdepth 5 -name "*.swift" 2>/dev/null | head -20
+```
+
+Tool:
+<returncode>
+0
+<output>
+/app/ACHNBrowserUI/ACHNBrowserUI/utils/EventsDescription.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/utils/FeedbackGenerator.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/models/Island.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/representables/SafariView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/representables/DocumentPickerView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/representables/ActivityControllerView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/AppDelegate.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/DesignFormViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/DashboardViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/DesignRowViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/DesignListViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/UserListFormViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/VillagerDetailViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/VillagersViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/CategoriesSearchViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/TodayChoresSectionViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/CollectionProgressRowViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/CollectionMoreDetailViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/ChoreListViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/ItemsViewModel.swift
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 3, $0.02):
+```
+find /app -name "*.swift" | xargs grep -l 
+"TodaySection\|UserCollection\|customChore\|Chore" 2>/dev/null | head -20
+```
+
+Tool:
+<returncode>
+0
+<output>
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Tests/BackendTests/CollectionT
+est.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/utils/AppUserD
+efault.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/TodaySe
+ction.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/Chore.s
+wift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/chores/ChoreListRowView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/chores/ChoreFormView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/chores/ChoreListView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/items/detail/ItemDetailView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemRowView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/items/ItemsListView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayCollectionProgressSec
+tion.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayTasksSection.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionEditView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayChoresSection.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/shared/Sheet.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/home/TabbarView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/settings/SettingsView.swift
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 4, $0.04):
+```
+cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/TodaySe
+ction.swift && echo "===" && cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift
+```
+
+Tool:
+<returncode>
+0
+<output_head>
+//
+//  File.swift
+//  
+//
+//  Created by theunimpossible on 5/21/20.
+//
+
+import Foundation
+
+public struct TodaySection: Codable, Hashable, Identifiable, Equatable {
+    public let name: Name
+    public var enabled: Bool
+    public var id: Name { name }
+
+    public init(name: Name, enabled: Bool) {
+        self.name = name
+        self.enabled = enabled
+    }
+    
+    public static func == (lhs: TodaySection, rhs: TodaySection) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+extension TodaySection {
+    public enum Name: String, Codable {
+        case events
+        case specialCharacters
+        case currentlyAvailable
+        case collectionProgress
+        case birthdays
+        case turnips
+        case subscribe
+        case mysteryIsland
+        case music
+        case tasks
+        case chores
+        case nookazon
+    }
+
+    public static let defaultSectionList: [TodaySection] = [
+        TodaySection(name: .events, enabled: true),
+        TodaySection(name: .specialCharacters, enabled: true),
+        TodaySection(name: .currentlyAvailable, enabled: true),
+        TodaySection(name: .collectionProgress, enabled: true),
+        TodaySection(name: .birthdays, enabled: true),
+        TodaySection(name: .turnips, enabled: true),
+        TodaySection(name: .tasks, enabled: true),
+        TodaySection(name: .chores, enabled: true),
+        TodaySection(name: .subscribe, enabled: true),
+        TodaySection(name: .music, enabled: true),
+        //TodaySection(name: .nameNookazon, enabled: true)
+        TodaySection(name: .mysteryIsland, enabled: true),
+    ]
+}
+===
+//
+//  CollectionViewModel.swift
+//  ACHNBrowserUI
+//
+//  Created by Thomas Ricouard on 08/04/2020.
+//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+//
+
+import Foundation
+import Combine
+import CloudKit
+import os.log
+
+public class UserCollection: ObservableObject {
+    public static let shared = UserCollection(iCloudDisabled: false)
+    
+    // MARK: - Published properties
+    @Published public var items: [Item] = []
+    @Published public var variants: [String: [Variant]] = [:]
+    @Published public var villagers: [Villager] = []
+    @Published public var residents: [Villager] = []
+    @Published public var critters: [Item] = []
+    @Published public var lists: [UserList] = []
+    @Published public var designs: [Design] = []
+    @Published public var dailyCustomTasks = DailyCustomTasks()
+    @Published public var chores: [Chore] = []
+    
+    @Published public var isCloudEnabled = true
+    @Published public var isSynched = false
+    
+    // MARK: - Private properties
+    private struct SavedData: Codable {
+        let items: [Item]
+        let variants: [String: [Variant]]?
+        let villagers: [Villager]
+        let residents: [Villager]?
+        let critters: [Item]
+        let lists: [UserList]?
+        let dailyCustomTasks: DailyCustomTasks?
+        let designs: [Design]?
+        let chores: [Chore]?
+    }
+    
+    private let filePath: URL
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+    
+    private let saveQueue = DispatchQueue(label: "achelper.save.queue")
+    
+    private static let recordType = "UserCollection"
+    private static let recordId = CKRecord.ID(recordName: 
+"CurrentUserCollection")
+    private static let assetKey = "data"
+    private var cloudKitDatabase: CKDatabase? = nil
+    private var currentRecord: CKRecord? = nil
+    
+    private let logHandler = OSLog(subsystem: "com.achelper.collection", 
+category: "ac-perf")
+    
+    public init(iCloudDisabled: Bool) {
+        do {
+            filePath = try FileManager.default.url(for: .documentDirectory,
+                                                   in: .userDomainMask,
+                                                   appropriateFor: nil,
+                                                   create: 
+false).appendingPathComponent("collection")
+            _ = self.loadCollection(file: filePath)
+            
+            if !iCloudDisabled {
+                checkiCloudStatus()
+            } else {
+                isCloudEnabled = false
+            }
+                        
+        } catch let error {
+            fatalError(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - Items management
+    public func itemsIn(category: Category, items: [Item]) -> Int {
+        os_signpost(.begin,
+                    log: logHandler,
+                    name: "Counting items with passed array",
+                    "Begin for category %{public}s",
+                    category.rawValue)
+        
+        let allItems = Items.shared.categories[category] ?? []
+        let inCollection = items.count(where: { allItems.contains($0) && 
+!$0.name.contains("(fake)") })
+        
+        os_signpost(.end,
+                    log: logHandler,
+                    name: "Counting items with passed array",
+                    "Done for category %{public}s",
+                    category.rawValue)
+        
+        return inCollection
+    }
+    
+    public func 
+<output_tail>
+th)
+            let modified = CKModifyRecordsOperation(recordsToSave: [record], 
+recordIDsToDelete: nil)
+            modified.savePolicy = .allKeys
+            modified.completionBlock = {
+                DispatchQueue.main.async {
+                    self.isSynched = true
+                }
+            }
+            cloudKitDatabase?.add(modified)
+        } else {
+            let record = CKRecord(recordType: Self.recordType,
+                                  recordID: Self.recordId)
+            let asset = CKAsset(fileURL: filePath)
+            record[Self.assetKey] = asset
+            
+            cloudKitDatabase?.save(record) { (record, error) in
+                DispatchQueue.main.async {
+                    self.currentRecord = record
+                    self.isSynched = true
+                }
+            }
+        }
+    }
+    
+    // MARK: - Import / Export
+    private func save() {
+        saveQueue.async { [weak self] in
+            guard let self = self else { return }
+            do {
+                let savedData = SavedData(items: self.items,
+                                          variants: self.variants,
+                                          villagers: self.villagers,
+                                          residents: self.residents,
+                                          critters: self.critters,
+                                          lists: self.lists,
+                                          dailyCustomTasks: 
+self.dailyCustomTasks,
+                                          designs: self.designs,
+                                          chores: self.chores)
+                let data = try self.encoder.encode(savedData)
+                try data.write(to: self.filePath, options: .atomicWrite)
+                
+                if self.isCloudEnabled {
+                    DispatchQueue.main.async {
+                        self.isSynched = false
+                        self.saveToCloudKit()
+                    }
+                }
+            } catch let error {
+                print("Error while saving collection: 
+\(error.localizedDescription)")
+            }
+            self.encoder.dataEncodingStrategy = .base64
+        }
+    }
+    
+    private func loadCollection(file: URL) -> Bool {
+        if let data = try? Data(contentsOf: file) {
+            decoder.dataDecodingStrategy = .base64
+            do {
+                let savedData = try decoder.decode(SavedData.self, from: data)
+                self.items = savedData.items
+                self.variants = savedData.variants ?? [:]
+                self.villagers = savedData.villagers
+                self.residents = savedData.residents ?? []
+                self.critters = savedData.critters
+                self.lists = savedData.lists ?? []
+                self.designs = savedData.designs ?? []
+                self.dailyCustomTasks = savedData.dailyCustomTasks ?? 
+DailyCustomTasks()
+                self.chores = savedData.chores ?? []
+                return true
+            } catch {
+                return false
+            }
+        }
+        return false
+    }
+    
+    public func deleteCollection() -> Bool {
+        do {
+            try FileManager.default.removeItem(at: filePath)
+            self.items = []
+            self.villagers = []
+            self.residents = []
+            self.critters = []
+            self.lists = []
+            self.dailyCustomTasks = DailyCustomTasks()
+            self.designs = []
+            self.chores = []
+            save()
+            return true
+        } catch {
+            return false
+        }
+    }
+    
+    public func generateExportURL() -> URL? {
+        do {
+            var sharedURL = try FileManager.default.url(for: .documentDirectory,
+                                                                    in: 
+.userDomainMask,
+                                                                    appropriateF
+or: nil,
+                                                                    create: 
+false)
+            sharedURL.appendPathComponent("exported-collection")
+            sharedURL.appendPathExtension("achelper")
+            try? FileManager.default.removeItem(at: sharedURL)
+            try FileManager.default.copyItem(at: filePath, to: sharedURL)
+            return sharedURL
+        } catch let error {
+            print(error.localizedDescription)
+            return nil
+        }
+    }
+    
+    public func sizeOfArchivedState() -> String {
+        do {
+            let resources = try filePath.resourceValues(forKeys:[.fileSizeKey])
+            let formatter = ByteCountFormatter()
+            formatter.allowedUnits = .useKB
+            formatter.countStyle = .file
+            return formatter.string(fromByteCount: Int64(resources.fileSize ?? 
+0))
+        } catch {
+            return "0"
+        }
+    }
+    
+    public func processImportedFile(url: URL) -> Bool {
+        let success = loadCollection(file: url)
+        if success {
+            save()
+        }
+        return success
+    }
+}
+
+<elided_chars>
+7468
+<warning>
+Output too long.
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 5, $0.06):
+```
+cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayChoresSection.swift 
+&& echo "===" && cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+//
+//  TodayChoresSection.swift
+//  ACHNBrowserUI
+//
+//  Created by Otavio Cordeiro on 29.05.20.
+//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+//
+
+import SwiftUI
+import Backend
+import UI
+
+struct TodayChoresSection: View {
+
+    // MARK: - Properties
+
+    @ObservedObject private var viewModel: TodayChoresSectionViewModel
+
+    // MARK: - Life cycle
+
+    public init(viewModel: TodayChoresSectionViewModel = 
+TodayChoresSectionViewModel()) {
+        self.viewModel = viewModel
+    }
+
+    var body: some View {
+        Section(header: SectionHeaderView(text: "Chores", icon: 
+"checkmark.seal.fill")) {
+            NavigationLink(destination: LazyView(ChoreListView())) {
+                VStack(alignment: .leading) {
+                    self.makeHeaderView()
+
+                    HStack(spacing: 15) {
+                        self.makeProgressView()
+                        self.makeRatioLabel()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+            }
+        }
+    }
+
+    // MARK: - Private
+
+    func makeHeaderView() -> some View {
+        Text("Manage and keep track of your chores and to-dos.")
+            .style(appStyle: .rowDescription)
+            .lineLimit(2)
+            .frame(maxHeight: .infinity)
+            .padding(.top, 8)
+    }
+
+    private func makeProgressView() -> some View {
+        return ProgressView(progress: CGFloat(viewModel.completeChoresCount) / 
+CGFloat(viewModel.totalChoresCount),
+                            trackColor: .acText,
+                            progressColor: .acHeaderBackground,
+                            height: 12)
+    }
+
+    private func makeRatioLabel() -> some View {
+        return Text("\(viewModel.completeChoresCount) / 
+\(viewModel.totalChoresCount)")
+            .font(Font.system(size: 12,
+                              weight: Font.Weight.semibold,
+                              design: Font.Design.rounded).monospacedDigit())
+            .foregroundColor(.acText)
+    }
+}
+
+// MARK: - Preview
+
+#if DEBUG
+struct TodayCustomTasksSection_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationView {
+            List {
+                TodayChoresSection()
+            }
+            .listStyle(GroupedListStyle())
+            .environment(\.horizontalSizeClass, .regular)
+        }
+        .previewLayout(.sizeThatFits)
+        .environmentObject(UserCollection.shared)
+    }
+}
+#endif
+===
+//
+//  TodayView.swift
+//  AC Helper UI Playground
+//
+//  Created by Matt Bonney on 5/6/20.
+//  Copyright © 2020 Matt Bonney. All rights reserved.
+//
+
+import SwiftUI
+import SwiftUIKit
+import Combine
+import Backend
+import UI
+
+struct TodayView: View {
+    
+    // MARK: - Vars
+    @EnvironmentObject private var uiState: UIState
+
+    @ObservedObject private var viewModel = DashboardViewModel()
+
+    @State private var selectedSheet: Sheet.SheetType?
+            
+    // MARK: - Body
+    var body: some View {
+        NavigationView {
+            List {
+                if uiState.routeEnabled {
+                    uiState.route.map { route in
+                        NavigationLink(destination: route.makeDetailView(),
+                                       isActive: $uiState.routeEnabled) {
+                                        EmptyView()
+                        }.hidden()
+                    }
+                }
+
+                Group {
+                    ForEach(viewModel.sectionOrder, id: \.self) { section in
+                        TodaySectionView(section: section,
+                                         viewModel: self.viewModel,
+                                         selectedSheet: self.$selectedSheet)
+                    }
+                    arrangeSectionsButton
+                }
+            }
+            .listStyle(GroupedListStyle())
+            .environment(\.horizontalSizeClass, .regular)
+            .navigationBarTitle(Text("\(dateString.capitalized)"))
+            .navigationBarItems(leading: aboutButton, trailing: settingsButton)
+            .sheet(item: $selectedSheet, content: { Sheet(sheetType: $0) })
+            
+            ActiveCrittersView()
+        }
+    }
+
+    var arrangeSectionsButton: some View {
+        Section {
+            Button(action: { self.selectedSheet = .rearrange(viewModel: 
+self.viewModel) }) {
+                HStack {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(.body, design: .rounded))
+                    Text("Change Section Order")
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .accentColor(.acHeaderBackground)
+        }
+    }
+    
+    // MARK: - Navigation Bar Button(s)
+    private var settingsButton: some View {
+        Button(action: { self.selectedSheet = .settings(subManager: 
+SubscriptionManager.shared,
+                                                        collection: 
+UserCollection.shared) } ) {
+            Image(systemName: "slider.horizontal.3")
+                .style(appStyle: .barButton)
+                .foregroundColor(.acText)
+        }
+        .buttonStyle(BorderedBarButtonStyle())
+        .accentColor(Color.acText.opacity(0.2))
+        .safeHoverEffect()
+    }
+    
+    private var aboutButton: some View {
+        Button(action: { self.selectedSheet = .about } ) {
+            Image(systemName: "info.circle")
+                .style(appStyle: .barButton)
+                .foregroundColor(.acText)
+        }
+        .buttonStyle(BorderedBarButtonStyle())
+        .accentColor(Color.acText.opacity(0.2))
+        .safeHoverEffect()
+    }
+    
+    // MARK: - Others
+    private var dateString: String {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEEE, MMM d")
+        return f.string(from: Date())
+    }
+}
+
+struct TodayView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationView {
+            TodayView()
+        }
+        .environmentObject(Items.shared)
+        .environmentObject(UIState())
+    }
+}
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 6, $0.08):
+```
+cat /app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionView.swift
+&& echo "===" && cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionEditView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+//
+//  TodaySectionView.swift
+//  ACHNBrowserUI
+//
+//  Created by theunimpossible on 5/24/20.
+//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+//
+
+import SwiftUI
+import Backend
+
+struct TodaySectionView: View {
+    @EnvironmentObject var uiState: UIState
+    
+    let section: TodaySection
+    
+    @ObservedObject var viewModel: DashboardViewModel
+    @Binding var selectedSheet: Sheet.SheetType?
+
+
+    var body: some View {
+        makeView()
+    }
+
+    func makeView() -> some View {
+        if !section.enabled {
+            return AnyView(EmptyView())
+        }
+
+        switch(section.name) {
+        case .events:
+            return AnyView(TodayEventsSection())
+        case .specialCharacters:
+            return AnyView(TodaySpecialCharactersSection())
+        case .currentlyAvailable:
+            return AnyView(TodayCurrentlyAvailableSection())
+        case .collectionProgress:
+            return AnyView(TodayCollectionProgressSection(viewModel: viewModel, 
+sheet: $selectedSheet))
+        case .birthdays:
+            return AnyView(TodayBirthdaysSection())
+        case .turnips:
+            return AnyView(TodayTurnipSection()
+                .onTapGesture {
+                    self.uiState.selectedTab = .turnips
+            })
+        case .subscribe:
+            return AnyView(TodaySubscribeSection(sheet: $selectedSheet))
+        case .mysteryIsland:
+            return AnyView(TodayMysteryIslandsSection())
+        case .music:
+            return AnyView(TodayMusicPlayerSection())
+        case .tasks:
+            return AnyView(TodayTasksSection(sheet: $selectedSheet))
+        case .chores:
+            return AnyView(TodayChoresSection())
+        case .nookazon:
+            return AnyView(TodayNookazonSection(sheet: $selectedSheet, 
+viewModel: viewModel))
+        }
+    }
+}
+===
+//
+//  TodaySectionEditView.swift
+//  AC Helper UI Playground
+//
+//  Created by Matt Bonney on 5/6/20.
+//  Copyright © 2020 Matt Bonney. All rights reserved.
+//
+
+import SwiftUI
+import Backend
+import Combine
+
+struct TodaySectionEditView: View {
+    @Environment(\.presentationMode) private var presentationMode
+
+    @ObservedObject var viewModel: DashboardViewModel
+
+    @State private var editMode = EditMode.active
+
+    var body: some View {
+        List(selection: self.$viewModel.selection) {
+            Section(header: SectionHeaderView(text: "Drag & Drop to Rearrange",
+                                              icon: 
+"arrow.up.arrow.down.circle.fill"),
+                    footer: self.footer) {
+                ForEach(viewModel.sectionOrder, id: \.name) { section in
+                    HStack {
+                        Image(systemName: section.iconName)
+                            .resizable()
+                            .aspectRatio(1, contentMode: .fit)
+                            .frame(width: 22)
+                            .foregroundColor(.acSecondaryText)
+                        
+                        Text(LocalizedStringKey(section.sectionName))
+                            .font(.system(.body, design: .rounded))
+                        
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .onMove(perform: onMove)
+            }
+        }
+        .onDisappear(perform: self.viewModel.saveSectionList)
+        .listStyle(GroupedListStyle())
+        .environment(\.editMode, $editMode)
+        .navigationBarTitle("Today Sections")
+        .navigationBarItems(trailing: dismissButton)
+    }
+    
+    private var dismissButton: some View {
+        Button(action: { self.presentationMode.wrappedValue.dismiss() }) {
+            Text("Done")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 14, style: 
+.continuous).foregroundColor(Color.acText.opacity(0.2)))
+    }
+    
+    // @TODO: Do we need explainer text? 
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Drag and drop").fontWeight(.bold) + Text(" to re-order 
+sections.")
+            Text("Check or un-check").fontWeight(.bold) + Text(" rows to hide 
+sections from the dashboard.")
+        }
+        .padding(.vertical)
+    }
+    
+    private func onMove(source: IndexSet, destination: Int) {
+        viewModel.sectionOrder.move(fromOffsets: source, toOffset: destination)
+    }
+}
+
+extension TodaySection {
+    var sectionName: String {
+        switch name {
+        case .events: return "Events"
+        case .specialCharacters: return "Possible visitors"
+        case .currentlyAvailable: return "Currently Available"
+        case .collectionProgress: return "Collection Progress"
+        case .birthdays: return "Today's Birthdays"
+        case .turnips: return "Turnips"
+        case .subscribe: return "Subscribe"
+        case .mysteryIsland: return "Mystery Islands"
+        case .music: return "Music player"
+        case .tasks: return "Today's Tasks"
+        case .chores: return "Chores"
+        case .nookazon: return "New on Nookazon"
+        }
+    }
+
+    var iconName: String {
+        switch name {
+        case .events: return "flag.fill"
+        case .specialCharacters: return "clock"
+        case .currentlyAvailable: return "calendar"
+        case .collectionProgress: return "chart.pie.fill"
+        case .birthdays: return "gift.fill"
+        case .turnips: return "dollarsign.circle.fill"
+        case .subscribe: return "suit.heart.fill"
+        case .mysteryIsland: return "sun.haze.fill"
+        case .music: return "music.note"
+        case .tasks: return "checkmark.seal.fill"
+        case .chores: return "checkmark.seal.fill"
+        case .nookazon: return "cart.fill"
+        }
+    }
+}
+
+struct TodaySectionEditView_Previews: PreviewProvider {
+    static var previews: some View {
+        TodaySectionEditView(viewModel: DashboardViewModel())
+    }
+}
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 7, $0.12):
+```
+cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayTasksSection.swift &&
+echo "===" && find /app -name "Villager*.swift" | head -20
+```
+
+Tool:
+<returncode>
+0
+<output>
+//
+//  TodayTasksSection.swift
+//  AC Helper UI Playground
+//
+//  Created by Matt Bonney on 5/8/20.
+//  Copyright © 2020 Matt Bonney. All rights reserved.
+//
+
+import SwiftUI
+import Backend
+
+struct TodayTasksSection: View {
+    @EnvironmentObject private var collection: UserCollection
+    @Binding var sheet: Sheet.SheetType?
+    
+    private var tasksCount: Int {
+        collection.dailyCustomTasks.tasks.count
+    }
+    
+    private var rows: Int {
+        var rowsFloat = CGFloat(tasksCount) / 4.0
+        rowsFloat.round(.up)
+        return Int(rowsFloat)
+    }
+        
+    // MARK: - Task Bubble
+    private func makeTaskBubble(task: DailyCustomTasks.CustomTask, index: Int) 
+-> some View {
+        ZStack {
+            Circle()
+                .foregroundColor(Color("ACBackground"))
+            Image(task.icon)
+                .resizable()
+                .scaleEffect(0.9)
+                .aspectRatio(contentMode: .fit)
+            if task.hasProgress {
+                ZStack {
+                    Circle()
+                        .stroke(lineWidth: 4.0)
+                        .opacity(0.3)
+                        .foregroundColor(Color.red)
+                    Circle()
+                        .trim(from: 0.0, to: 
+CGFloat(task.curProgress)/CGFloat(task.maxProgress))
+                        .stroke(style: StrokeStyle(lineWidth: 4.0, lineCap: 
+.round, lineJoin: .round))
+                        .foregroundColor(Color.green)
+                        .rotationEffect(Angle(degrees: 270.0))
+                        .animation(.easeInOut)
+                }
+            }
+        }
+        .frame(maxHeight: 44)
+        .onTapGesture {
+            guard task.hasProgress else { return }
+            self.collection.updateProgress(taskId: index)
+            FeedbackGenerator.shared.triggerSelection()
+        }
+        .onLongPressGesture {
+            guard task.hasProgress else { return }
+            self.collection.resetProgress(taskId: index)
+            FeedbackGenerator.shared.triggerSelection()
+        }
+    }
+    
+    var body: some View {
+        Section(header: SectionHeaderView(text: "Today's Tasks", icon: 
+"checkmark.seal.fill")) {
+            VStack(spacing: 15) {
+                GridStack<AnyView>(rows: rows, columns: 4, showDivider: false) {
+(row, column) in
+                    let taskId = row * 4 + column
+                    guard let task = 
+self.collection.dailyCustomTasks.tasks[safe: taskId] else {
+                        return EmptyView().eraseToAnyView()
+                    }
+                    return self.makeTaskBubble(task: task, index: 
+taskId).eraseToAnyView()
+                }
+                HStack {
+                    Spacer()
+                    Text("Edit")
+                    .onTapGesture {
+                        self.sheet = .customTasks(collection: self.collection)
+                    }
+                    .foregroundColor(.acText)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 14)
+                    .background(Color.acText.opacity(0.2))
+                    .mask(RoundedRectangle(cornerRadius: 14, style: 
+.continuous))
+                    Spacer()
+                    Text("Reset")
+                        .onTapGesture {
+                            self.collection.resetTasks()
+                    }
+                    .foregroundColor(.acText)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 14)
+                    .background(Color.acText.opacity(0.2))
+                    .mask(RoundedRectangle(cornerRadius: 14, style: 
+.continuous))
+                    Spacer()
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+    }
+}
+
+struct TodayTasksSection_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationView {
+            List {
+                TodayTasksSection(sheet: .constant(nil))
+            }
+            .listStyle(GroupedListStyle())
+            .environment(\.horizontalSizeClass, .regular)
+        }
+        .previewLayout(.sizeThatFits)
+        .environmentObject(UserCollection.shared)
+    }
+}
+===
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/Village
+r.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/Village
+rHourse.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/Village
+rLike.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagerDetailView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagersSortView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagerRowView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagersListView.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/VillagerDetailViewModel.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/viewModels/VillagersViewModel.swift
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 8, $0.16):
+```
+cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/Village
+r.swift && echo "===" && cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagerRowView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+//
+//  Villager.swift
+//  ACHNBrowserUI
+//
+//  Created by Thomas Ricouard on 17/04/2020.
+//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+//
+
+import Foundation
+
+public struct Villager: Identifiable, Codable, Equatable {
+    public let id: Int
+    public let fileName: String?
+    public let catchPhrase: String?
+    public let catchTranslations: [String: String]?
+    public let name: [String: String]
+    public let personality: String
+    public let birthday: String?
+    public var formattedBirthday: String? {
+        guard let birthday = birthday else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d/M"
+        let day = formatter.date(from: birthday)!
+        formatter.setLocalizedDateFormatFromTemplate("dd MMMM")
+        return formatter.string(from: day)
+    }
+    
+    public let gender: String
+    public let species: String
+    
+    public var localizedName: String { 
+        guard let languageCode = Locale.current.languageCode,
+            let key = self.name.keys.first(where: { $0.suffix(2) == languageCode
+}),
+            let localizedName = self.name[key]
+            else {
+                return self.name["name-en"] ?? self.name["name-USen"] ?? ""
+        }
+        
+        return localizedName
+    }
+    
+    public var localizedCatchPhrase: String {
+        guard let catchTranslations = catchTranslations,
+            let languageCode = Locale.current.languageCode,
+            let key = catchTranslations.keys.first(where: { $0.suffix(2) == 
+languageCode }),
+            let localizedPhrase = catchTranslations[key]
+            else {
+                return catchPhrase ?? ""
+        }
+        
+        return localizedPhrase
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, personality, birthday, gender, species
+        case fileName = "file-name"
+        case catchPhrase = "catch-phrase"
+        case catchTranslations = "catch-translations"
+    }
+}
+
+public let static_villager = Villager(id: 0,
+                                      fileName: "test",
+                                      catchPhrase: "Hello world",
+                                      catchTranslations: [:],
+                                      name: ["name-en": "Test villager"],
+                                      personality: "Boring",
+                                      birthday: "2/4",
+                                      gender: "Male",
+                                      species: "Ant")
+===
+//
+//  VillagerRowView.swift
+//  ACHNBrowserUI
+//
+//  Created by Thomas Ricouard on 17/04/2020.
+//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+//
+
+import SwiftUI
+import Backend
+import UI
+
+struct VillagerRowView: View {
+
+    // MARK: - Type
+
+    enum Style {
+        case none
+        case species
+        case personality
+    }
+    
+    enum Action  {
+        case like, home
+    }
+
+    // MARK: - Properties
+
+    @EnvironmentObject private var collection: UserCollection
+    private let villager: Villager
+    private let style: Style
+    private let action: Action
+
+    // MARK: - Life cycle
+
+    init(villager: Villager, style: Style = .none, action: Action = .like) {
+        self.villager = villager
+        self.style = style
+        self.action = action
+    }
+    
+    private var actionButton: some View {
+        Group {
+            if action == .like {
+                LikeButtonView(villager: villager)
+            } else {
+                Button(action: {
+                    _ = self.collection.toggleResident(villager: self.villager)
+                    FeedbackGenerator.shared.triggerNotification(type: .success)
+                }) {
+                    Image(systemName: collection.residents.contains(villager) ? 
+"house.fill" : "house")
+                        .foregroundColor(.acTabBarBackground)
+                        .imageScale(.medium)
+                }
+                .buttonStyle(BorderlessButtonStyle())
+            }
+        }
+    }
+
+    var body: some View {
+        HStack {
+            actionButton
+            ItemImage(path: ACNHApiService.BASE_URL.absoluteString +
+                ACNHApiService.Endpoint.villagerIcon(id: villager.id).path(),
+                      size: 50)
+
+            VStack(alignment: .leading) {
+                Text(villager.localizedName)
+                    .style(appStyle: .rowTitle)
+
+                if style == .species {
+                    Text(LocalizedStringKey(villager.species))
+                        .font(.subheadline)
+                        .foregroundColor(.acSecondaryText)
+                } else if style == .personality {
+                    Text(LocalizedStringKey(villager.personality))
+                        .font(.subheadline)
+                        .foregroundColor(.acSecondaryText)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Preview
+
+#if DEBUG
+struct VillagerRowView_Previews: PreviewProvider {
+    static var previews: some View {
+        List {
+            VillagerRowView(villager: static_villager, style: .none)
+
+            VillagerRowView(villager: static_villager, style: .species)
+
+            VillagerRowView(villager: static_villager, style: .personality)
+        }
+    }
+}
+#endif
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 9, $0.20):
+```
+cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift | grep -n 
+"toggleResident\|resident\|Resident\|chore\|Chore\|visited\|Visited" | head -30
+```
+
+Tool:
+<returncode>
+0
+<output>
+21:    @Published public var residents: [Villager] = []
+26:    @Published public var chores: [Chore] = []
+36:        let residents: [Villager]?
+41:        let chores: [Chore]?
+160:    public func toggleResident(villager: Villager) -> Bool {
+161:        let added = residents.toggle(item: villager)
+256:    // MARK: - Chores
+258:    public func addChore(_ chore: Chore) {
+259:        chores.append(chore)
+263:    public func deleteChore(_ chore: Chore) {
+264:        chores.removeAll { $0 == chore }
+268:    public func toggleChore(_ chore: Chore) {
+269:        guard let index = chores.firstIndex(of: chore) else { return }
+270:        chores[index].isFinished.toggle()
+274:    public func resetChores() {
+275:        for index in 0..<chores.count {
+276:            chores[index].isFinished = false
+281:    public func updateChore(_ chore: Chore) {
+282:        guard let index = chores.firstIndex(of: chore) else { return }
+283:        chores[index] = chore
+375:                                          residents: self.residents,
+380:                                          chores: self.chores)
+405:                self.residents = savedData.residents ?? []
+410:                self.chores = savedData.chores ?? []
+424:            self.residents = []
+429:            self.chores = []
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 10, $0.25):
+```
+cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Tests/BackendTests/CollectionT
+est.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+import XCTest
+@testable import Backend
+
+final class CollectionTests: XCTestCase {
+    let collection = UserCollection(iCloudDisabled: true)
+    
+    func testUserCollectionToggleItem() {
+        _ = collection.toggleItem(item: static_item)
+        XCTAssert(collection.items.count == 1, "items should have one item")
+        
+        _ = collection.toggleItem(item: static_item)
+        XCTAssert(collection.items.isEmpty, "items should be empty")
+    }
+    
+    func testUserCollectionToggleCritters() {
+        _ = collection.toggleCritters(critter: static_item)
+        XCTAssert(collection.critters.count == 1, "critters should have one 
+item")
+        
+        _ = collection.toggleCritters(critter: static_item)
+        XCTAssert(collection.critters.isEmpty, "critters should be empty")
+    }
+    
+    func testUserCollectionToggleVillager() {
+        _ = collection.toggleVillager(villager: static_villager)
+        XCTAssert(collection.villagers.count == 1, "villagers should have one 
+item")
+        
+        _ = collection.toggleVillager(villager: static_villager)
+        XCTAssert(collection.villagers.isEmpty, "villagers should be empty")
+    }
+}
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 11, $0.29):
+```
+find /app -name "*.swift" | xargs grep -l 
+"Localizable\|de.lproj\|German\|german" 2>/dev/null | head -10 && echo "===" && 
+find /app -name "*.lproj" -type d | head -20
+```
+
+Tool:
+<returncode>
+0
+<output>
+===
+/app/ACHNBrowserUI/ACHNBrowserUI/en.lproj
+/app/ACHNBrowserUI/ACHNBrowserUI/zh-Hans.lproj
+/app/ACHNBrowserUI/ACHNBrowserUI/zh-Hant-TW.lproj
+/app/ACHNBrowserUI/ACHNBrowserUI/ru.lproj
+/app/ACHNBrowserUI/ACHNBrowserUI/es.lproj
+/app/ACHNBrowserUI/ACHNBrowserUI/ja.lproj
+/app/ACHNBrowserUI/ACHNBrowserUI/fr.lproj
+/app/ACHNBrowserUI/ACHNBrowserUI/de.lproj
+/app/ACHNBrowserUI/ACHNBrowserUI/Base.lproj
+/app/ACHNBrowserUI/ACHNBrowserUI/it.lproj
+/app/ACHNBrowserUI/ACHNBrowserUITV/Base.lproj
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 12, $0.34):
+```
+cat /app/ACHNBrowserUI/ACHNBrowserUI/de.lproj/Localizable.strings && echo "===" 
+&& cat /app/ACHNBrowserUI/ACHNBrowserUI/en.lproj/Localizable.strings | grep -i 
+"chore\|task\|visit" | head -20
+```
+
+Tool:
+<returncode>
+0
+<output_head>
+/*
+  Localizable.strings
+  ACHNBrowserUI
+
+  Created by Jan on 09.05.20.
+  Copyright © 2020 Thomas Ricouard. All rights reserved.
+*/
+
+"Tap here to preview a notification" = "Tippe hier für eine Vorschau";
+"Upgrade to +" = "Upgrade auf +";
+"You're subscribed to AC Helper+" = "Du abonnierst AC Helper+";
+
+// copy and paste "export"  of Text() and similar SwiftUI functions
+// Global
+"Close" = "Schließen";
+"Dismiss" = "Abbrechen";
+"Save" = "Speichern";
+
+// Date Format
+"EEEE, dd MMMM" = "EEEE, dd. MMMM";
+"d/M" = "d.M.";
+"dd" = "dd";
+"MMM" = "MMM";
+"MMM dd" = "dd. MMM";
+"dd MMMM" = "dd. MMMM";
+
+// TabbarView
+"Dashboard" = "Startseite";
+"Catalog" = "Katalog";
+"Turnips" = "Rüben";
+"Villagers" = "Bewohner";
+"Collection" = "Sammlung";
+
+// TodayView
+"Change Section Order" = "Ändere die Reihenfolge";
+// TodaySectionEditView
+"Drag & Drop to Rearrange" = "Zum Anordnen halten und verschieben";
+"Hidden" = "Versteckt";
+"Today Sections" = "Heute Abschnitte";
+"Done" = "Fertig";
+" to re-order sections." = " to re-order sections.";
+"Check or un-check" = "Check or un-check";
+" rows to hide sections from the dashboard." = " rows to hide sections from the 
+dashboard.";
+"Your top-most section will be the default detail view on iPad and Mac." = "Your
+top-most section will be the default detail view on iPad and Mac.";
+// TodayBirthdaySection
+"Birthdays" = "Geburtstage";
+"Today's Birthdays" = "Heutige Geburtstage";
+"Today's Birthday" = "Heutiger Geburtstag";
+// TodayCollectionProgressSection
+"Collection Progress" = "Sammelfortschritt";
+"Share" = "Teilen";
+// TodayCurrentlyAvailableSection
+"Currently Available" = "Aktuell verfügbar";
+"%lld/%lld Bugs" = "%lld/%lld Insekten";
+"%lld/%lld Fish" = "%lld/%lld Fische";
+"%lld NEW" = "%lld NEU";
+// TodayEventsSection
+"Events" = "Ereignisse";
+"Currently" = "Aktuell";
+"No Events Today" = "Heute keine Ereignisse";
+"Upcoming" = "Anstehend";
+// TodayTasksSection
+"Today's Tasks" = "Heutige Aufgaben";
+"This feature requires " = "Diese Funktion benötigt ";
+"Learn more >" = "Erfahre mehr >";
+// TodayTurnipSection
+"Today is sunday, don't forget to buy more turnips and fill your buy price." = 
+"Heute ist Sonntag, denk daran Rüben zu kaufen und den Einkaufspreis 
+einzutragen.";
+"Your turnips predictions will be displayed here once you fill in some prices." 
+= "Deine Kaufpreis-Prognose wird hier angezeigt, sobald du Kaufpreise 
+eingetragen hast.";
+"Today's average price should be around " = "Der heutige durchschnittliche 
+Kaufpreis sollte bei ";
+" in the morning, and " = " am Morgen und bei ";
+" this afternoon." = " am Nachmittag liegen.";
+// TodayNookazonSection
+"New on Nookazon" = "Neu auf Nookazon";
+"Nookazon is loading..." = "Nookazon lädt...";
+// TodayWhatsNewSection
+"What's New" = "Was ist neu";
+"See what's new in update %@" = "Schau dir an, was es neues gibt in Version %@";
+// TodaySubscribeSection
+"You're subscribed to AC Helper+. Thank you so much for you support!" = "Du 
+abonnierst AC Helper+. Vielen Dank für deine Unterstützung!";
+"If you enjoy the application, consider subscribing to AC Helper+, to get access
+to some awesome features and support us!" = "Wenn dir die App gefällt, abonniere
+AC Helper+, um Zugriff auf großartige Funktionen zu erhalten und uns zu 
+unterstütuen!";
+
+// SubscribeView
+"AC Helper+" = "AC Helper+";
+"ACHelperPlusDescription" = "Das AC Helper+ Abonnement ist ein guter Weg deine 
+Unterstützung für unser kostenloses Open Source Projekt. ♥️
+
+Außerdem erhältst du Zugriff auf exklusive, großartige Funktionen: Rüben 
+Prognose Benachrichtigungen und beliebig viele Gegenstands-Listen! 📈";
+
+"ACHelperPlusDetails" = "Über die Benachrichtigungs-Funktion:
+Jeden Tag um 8 und 12 Uhr wirst du eine Benachrichtigung mit dem 
+prognostizierten, durchschnittlichen Ankaufspreis bei Nepp und Schlepp erhalten.
+Je mehr Ankaufspreise du in der App ab montags morgens speicherst, um so genauer
+wird die nächste Prognose sein!
+
+Über die Listen-Funktion:
+Ohne Abonnement kannst du nur eine Liste mit Gegenständen im \"Meine Sachen\" 
+Register erstellen.
+Wenn du dir AC Helper+ holst, kannst du beliebig viele Listen erstellen und 
+unterschiedlich befüllen.";
+"ACHelperPlusPriceAndAboDetail %@ %@" = "Ein monatliches Abo über %@ pro Monat 
+wird nach der Bestätigung deinem iTunes Konto hinzugefügt.
+Das Abonnement verlängert sich automatisch, solange es nicht bis 24 Stunden vor 
+der nächsten Verlängerung beendet wird.
+Du kannst das Abonnement jederzeit in deinen iTunes Kontoeinstellungen beenden. 
+Jeder nicht genutzte Teil einer kostenlosen Testversion verfällt, wenn du ein 
+Abonnement abschließt.";
+"Subscribe for %@ / Month" = "Abonnieren für %@ / Monat";
+"Buy lifetime AC Helper+ for %@" = "Lebenslang für %@ kaufen";
+"Thank you for your support!" = "Vielen Dank für deine Unterstützung!";
+"%@ Monthly" = "%@ / Monat";
+"%@ Yearly" = "%@ / Jahr";
+
+// AboutView
+"About" = "Über";
+"The app" = "Die App";
+"Souce code / report an issue" = "Quell Code / Fehler melden";
+"Rate the app on the App Store" = "Bewerte die App im App Store";
+"Privac
+<output_tail>
+n. Hier gibt es ausschließlich Insekten, die sich an oder in Bäumen aufhalten.";
+"Big Fish Island. This island has rare hybrid flowers and the only fish 
+available are larger ones, including some of the more rare ones." = "Auf dieser 
+Insel gibt es seltene Blumen und es gibt ausschließlich große Fische, auch die 
+selteneren.";
+"This island is exactly the same as Bamboo Island but the trees are all just 
+regular hardwood trees." = "Diese Insel ist identisch zur Bambus-Insel, mit dem 
+Unterschied, das es statt Bambus normale Bäume mit hartem Holz gibt.";
+"There is one square cliff at the north east, a few flowers and rocks and a 
+small amount of fruit trees. Only insects associated with water spawn here." = 
+"Im Nord-Osten gibt es eine viereckige Klippe, ansonsten gibt es hier ein paar 
+Blumen, Felsen und eine kleine Anzahl an Obstbäumen. Hier gibt es nur Insekten, 
+die sich am oder auf dem Wasser aufhalten.";
+"This rare island only spawns big fish. Otherwise it is quite normal, with less 
+flowers and a lower chance of appearing than the other big fish island." = "Auf 
+dieser seltenen Insel gibt es nur große Fische. Ansonsten ist diese Insel sehr 
+normal. Es gibt wenige Blumen. Diese Insel kommt seltener vor als die andere 
+Fisch-Insel.";
+"Everything you can fish here is trash. Only water-related insects spawn." = 
+"Alles was du hier angelst ist Müll. Die verfügbaren Insekten sind 
+ausschließlich Wasserbezogene Insekten.";
+"A rectangular pond with rectangular cliffs inside, the tallest one being too 
+tall to climb up to. The only fish that spawn here are the largest finned fish."
+= "Ein rechteckiger Teich mit einer rechteckigen Insel mit rechteckigen Klippen.
+Hier gibt es ausschließlich große Fische die nur in Teichen erscheinen.";
+"Lots of cliffs, waterfalls and river forks. Normal resource spawns." = "Viele 
+Klippen, Wasserfälle und Flussverzweigungen. Die verkommenden Ressourcen sind 
+normal.";
+"A very rare island with flowers, scorpions and a rectangular pond. If you climb
+up onto the cliff and climb down from the back, you can vault over to a tiny 
+island in the middle and get 8 gold nuggets from a single rock." = "Eine sehr 
+seltene Insel mit Blumen, Skorpionen und einem rechteckigen Teich. Wenn du die 
+Klippe hinauf kletters und auf der Rückseite wieder herunter, kannst du mit dem 
+Sprungstab eine kleine Insel erreichen auf der du vom Fels 8 Golderz bekommst.";
+
+// Added 2020-05-20
+"Same color" = "Gleiche Farbe";
+// New settings
+"Using iCloud sync" = "iCloud Synchronisierung aktiv";
+"Synchronized with iCloud" = "Mit iCloud synchronisiert";
+
+// New card
+"Possible visitors" = "Mögliche Besucher";
+"On" = "Auf";
+" your island" = " deiner Insel";
+"From 6pm to 5am" = "Von 18 bis 5 Uhr";
+"From 8pm to 5am" = "Von 20 bis 5 Uhr";
+"From 5am to 12pm" = "Von 5 bis 0 Uhr";
+
+//Special characters
+"K.K Slider" = "K.K. Slider";
+"Daisy Mae" = "Jorna";
+"C.J" = "Lomeus";
+"Flick" = "Carlson";
+"Kicks" = "Schubert";
+"Saharah" = "Aziza";
+"Label" = "Minna";
+"Leif" = "Gerd";
+"Redd" = "Reiner";
+"Wisp" = "Buh";
+"Celeste" = "Eufemia";
+
+// Added 2020-05-23
+"Museum Day" = "Internationaler Museumstag";
+"Wedding season" = "Hochzeitssaison";
+"Bug-Off contest" = "Insektikus-Turnier";
+"Meteor shower" =  "Sternschnuppen";
+
+// Added 2020-05-23
+"Reset" = "Zurücksetzen";
+"View Turnip.Exchange islands" = "Zeige Turnip.Exchange Inseln";
+"View on TurnipProphet" = "Auf TurnipProphet ansehen";
+
+// Added 2020-05-24
+"Music player" = "Musikplayer";
+"Tracks" = "Lieder";
+
+// Added 2020-06-01
+// Chore
+"Title" = "Titel";
+"Chore title" = "Titel der Aufgabe";
+"Description" = "Beschreibung";
+"Short description about the chore" = "Eine kurze Beschreibung der Aufgabe";
+"Add Chore" = "Aufgabe hinzufügen";
+"Chores" = "Aufgaben";
+"Have a friend to visit? A gift to a villager? Track your chores and to-dos 
+here." = "Du willst einen Freund besuchen? Einem Bewohner ein bestimmtes 
+Geschenk überreichen? Verwalte hier deine Augaben und To-Dos.";
+"Manage and keep track of your chores and to-dos." = "Verwalte und beobachte 
+deine Aufgaben und To-Dos.";
+
+// Design
+"Creators and Designs" = "Ersteller und Designs";
+"Add Creator/Design Item" = "Ersteller/Design hinzufügen";
+
+// Added 2020-06-03
+// Custom Daily Tasks
+"Add a custom task" = "Eigene Aufgabe hinzufügen";
+"Edit task" = "Aufgabe bearbeiten";
+"Task name" = "Aufgabenname";
+"Name of the task" = "Name der Aufgabe";
+"Has progress" = "Hat Fortschritt";
+"Max amount" = "Max. Anzahl";
+// Default Custom Tasks
+"Hit rocks" = "Felsen hauen";
+"Find fossils" = "Fossilien finden";
+"Talk to villager" = "Mit Bewohnern sprechen";
+"Find furniture" = "Möbel in Bäumen finden";
+"Find buried bell" = "Vergrabenen Sterni finden";
+"Use ATM" = "Nook Automat benutzen";
+"Find bottle message" = "Flaschenpost finden";
+"Obtain DIY from villager" = "Bastelanleitung von Bewohner erhalten";
+
+//Villagers filte
+"All" = "Alle";
+"Liked" = "Gefällt mir";
+"Residents" = "Bewohner";
+
+// Added 2020-06-05
+"Contact / follow us on Twitter" = "Kontaktiere / folge uns auf Twitter";
+===
+
+<elided_chars>
+35584
+<warning>
+Output too long.
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 13, $0.40):
+Now let me look at the VillagerDetailView and understand how to navigate to it:
+
+```
+cat /app/ACHNBrowserUI/ACHNBrowserUI/views/villagers/VillagerDetailView.swift | 
+head -50 && echo "===" && cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift | nl -ba | grep -A5 -B5 "160\|toggleResident"
+```
+
+Tool:
+<returncode>
+0
+<output>
+//
+//  VillagerDetailView.swift
+//  ACHNBrowserUI
+//
+//  Created by Thomas Ricouard on 17/04/2020.
+//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+//
+
+import SwiftUI
+import Backend
+import UI
+
+struct VillagerDetailView: View {
+    @ObservedObject var viewModel: VillagerDetailViewModel
+    
+    @State private var backgroundColor = Color.acSecondaryBackground
+    @State private var textColor = Color.acText
+    @State private var secondaryTextColor = Color.acSecondaryText
+    @State private var sheet: Sheet.SheetType?
+    @State private var isLoadingItem = true
+    @State private var expandedHouseItems = false
+    @State private var expandedLikeItems = false
+    
+    var villager: Villager {
+        viewModel.villager
+    }
+    
+    init(villager: Villager) {
+        self.viewModel = VillagerDetailViewModel(villager: villager)
+    }
+    
+    private var shareButton: some View {
+        Button(action: {
+            let image = NavigationView {
+                self.makeBody(items: false)
+            }
+            .navigationViewStyle(StackNavigationViewStyle())
+            .frame(width: 350, height: 750).asImage()
+            self.sheet = .share(content: [ItemDetailSource(name: 
+self.villager.localizedName, image: image)])
+        }) {
+            Image(systemName: "square.and.arrow.up").imageScale(.large)
+        }
+        .safeHoverEffectBarItem(position: .trailing)
+    }
+    
+    private var residentButton: some View {
+        Button(action: {
+            self.viewModel.toggleResident()
+            FeedbackGenerator.shared.triggerNotification(type: .success)
+        }) {
+===
+   155          let added = villagers.toggle(item: villager)
+   156          save()
+   157          return added
+   158      }
+   159      
+   160      public func toggleResident(villager: Villager) -> Bool {
+   161          let added = residents.toggle(item: villager)
+   162          save()
+   163          return added
+   164      }
+   165      
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 14, $0.47):
+Now I have a good understanding of the codebase. Let me implement all the 
+required changes:
+
+1. Add `visitedResidents` to `UserCollection`
+2. Add `villagerVisits` to `TodaySection.Name`
+3. Create `TodayVillagerVisitsSection` view
+4. Update `TodaySectionView` to handle the new section
+5. Update `TodaySectionEditView` with section name and icon
+6. Add German localization
+
+```
+nl -ba 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift | sed -n '1,50p'
+```
+
+Tool:
+<returncode>
+0
+<output>
+     1  //
+     2  //  CollectionViewModel.swift
+     3  //  ACHNBrowserUI
+     4  //
+     5  //  Created by Thomas Ricouard on 08/04/2020.
+     6  //  Copyright © 2020 Thomas Ricouard. All rights reserved.
+     7  //
+     8  
+     9  import Foundation
+    10  import Combine
+    11  import CloudKit
+    12  import os.log
+    13  
+    14  public class UserCollection: ObservableObject {
+    15      public static let shared = UserCollection(iCloudDisabled: false)
+    16      
+    17      // MARK: - Published properties
+    18      @Published public var items: [Item] = []
+    19      @Published public var variants: [String: [Variant]] = [:]
+    20      @Published public var villagers: [Villager] = []
+    21      @Published public var residents: [Villager] = []
+    22      @Published public var critters: [Item] = []
+    23      @Published public var lists: [UserList] = []
+    24      @Published public var designs: [Design] = []
+    25      @Published public var dailyCustomTasks = DailyCustomTasks()
+    26      @Published public var chores: [Chore] = []
+    27      
+    28      @Published public var isCloudEnabled = true
+    29      @Published public var isSynched = false
+    30      
+    31      // MARK: - Private properties
+    32      private struct SavedData: Codable {
+    33          let items: [Item]
+    34          let variants: [String: [Variant]]?
+    35          let villagers: [Villager]
+    36          let residents: [Villager]?
+    37          let critters: [Item]
+    38          let lists: [UserList]?
+    39          let dailyCustomTasks: DailyCustomTasks?
+    40          let designs: [Design]?
+    41          let chores: [Chore]?
+    42      }
+    43      
+    44      private let filePath: URL
+    45      private let encoder = JSONEncoder()
+    46      private let decoder = JSONDecoder()
+    47      
+    48      private let saveQueue = DispatchQueue(label: "achelper.save.queue")
+    49      
+    50      private static let recordType = "UserCollection"
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 15, $0.54):
+```
+nl -ba 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift | sed -n '250,300p'
+```
+
+Tool:
+<returncode>
+0
+<output>
+   250      public func updateDesign(_ design: Design) {
+   251          guard let index = designs.firstIndex(of: design) else { return }
+   252          designs[index] = design
+   253          save()
+   254      }
+   255  
+   256      // MARK: - Chores
+   257  
+   258      public func addChore(_ chore: Chore) {
+   259          chores.append(chore)
+   260          save()
+   261      }
+   262  
+   263      public func deleteChore(_ chore: Chore) {
+   264          chores.removeAll { $0 == chore }
+   265          save()
+   266      }
+   267  
+   268      public func toggleChore(_ chore: Chore) {
+   269          guard let index = chores.firstIndex(of: chore) else { return }
+   270          chores[index].isFinished.toggle()
+   271          save()
+   272      }
+   273  
+   274      public func resetChores() {
+   275          for index in 0..<chores.count {
+   276              chores[index].isFinished = false
+   277          }
+   278          save()
+   279      }
+   280  
+   281      public func updateChore(_ chore: Chore) {
+   282          guard let index = chores.firstIndex(of: chore) else { return }
+   283          chores[index] = chore
+   284          save()
+   285      }
+   286  
+   287      // MARK: - CloudKit
+   288      private func checkiCloudStatus() {
+   289          CKContainer.default().accountStatus { (status, error) in
+   290              if error != nil || status != .available {
+   291                  DispatchQueue.main.async {
+   292                      self.isCloudEnabled = false
+   293                  }
+   294              } else {
+   295                  self.cloudKitDatabase = 
+CKContainer.default().privateCloudDatabase
+   296                  self.reloadFromCloudKit()
+   297                  self.subscribeToCloudKit()
+   298              }
+   299          }
+   300      }
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 16, $0.61):
+Now I have enough context. Let me implement all the changes:
+
+**Step 1: Add `visitedResidents` to `UserCollection`**
+
+```
+sed -i 's/@Published public var chores: \[Chore\] = \[\]/@Published public var 
+chores: [Chore] = []\n    @Published public var visitedResidents: [Villager] = 
+[]/' 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 17, $0.68):
+Now add `toggleVisitedResident` and `resetVisitedResidents` methods after the 
+chores section:
+
+```
+sed -i 's|    public func updateChore(_ chore: Chore) {|    // MARK: - Villager 
+Visits\n\n    public func toggleVisitedResident(villager: Villager) {\n        
+if visitedResidents.contains(villager) {\n            visitedResidents.removeAll
+{ $0 == villager }\n        } else {\n            
+visitedResidents.append(villager)\n        }\n    }\n\n    public func 
+resetVisitedResidents() {\n        visitedResidents.removeAll()\n    }\n\n    
+public func updateChore(_ chore: Chore) {|' 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 18, $0.75):
+**Step 2: Add `villagerVisits` to `TodaySection.Name` and update 
+`defaultSectionList`**
+
+```
+sed -i 's/        case nookazon/        case nookazon\n        case 
+villagerVisits/' 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/TodaySe
+ction.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 19, $0.82):
+```
+sed -i 's/        TodaySection(name: .mysteryIsland, enabled: true),/        
+TodaySection(name: .mysteryIsland, enabled: true),\n        TodaySection(name: 
+.villagerVisits, enabled: true),/' 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/TodaySe
+ction.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 20, $0.89):
+```
+cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/TodaySe
+ction.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+//
+//  File.swift
+//  
+//
+//  Created by theunimpossible on 5/21/20.
+//
+
+import Foundation
+
+public struct TodaySection: Codable, Hashable, Identifiable, Equatable {
+    public let name: Name
+    public var enabled: Bool
+    public var id: Name { name }
+
+    public init(name: Name, enabled: Bool) {
+        self.name = name
+        self.enabled = enabled
+    }
+    
+    public static func == (lhs: TodaySection, rhs: TodaySection) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+extension TodaySection {
+    public enum Name: String, Codable {
+        case events
+        case specialCharacters
+        case currentlyAvailable
+        case collectionProgress
+        case birthdays
+        case turnips
+        case subscribe
+        case mysteryIsland
+        case music
+        case tasks
+        case chores
+        case nookazon
+        case villagerVisits
+    }
+
+    public static let defaultSectionList: [TodaySection] = [
+        TodaySection(name: .events, enabled: true),
+        TodaySection(name: .specialCharacters, enabled: true),
+        TodaySection(name: .currentlyAvailable, enabled: true),
+        TodaySection(name: .collectionProgress, enabled: true),
+        TodaySection(name: .birthdays, enabled: true),
+        TodaySection(name: .turnips, enabled: true),
+        TodaySection(name: .tasks, enabled: true),
+        TodaySection(name: .chores, enabled: true),
+        TodaySection(name: .subscribe, enabled: true),
+        TodaySection(name: .music, enabled: true),
+        //TodaySection(name: .nameNookazon, enabled: true)
+        TodaySection(name: .mysteryIsland, enabled: true),
+        TodaySection(name: .villagerVisits, enabled: true),
+    ]
+}
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 21, $0.98):
+**Step 3: Create `TodayVillagerVisitsSection` view**
+
+```
+cat <<'EOF' > 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayVillagerVisitsSection
+.swift
+//
+//  TodayVillagerVisitsSection.swift
+//  ACHNBrowserUI
+//
+
+import SwiftUI
+import Backend
+import UI
+
+struct TodayVillagerVisitsSection: View {
+
+    // MARK: - Properties
+
+    @EnvironmentObject private var collection: UserCollection
+    @State private var selectedVillager: Villager? = nil
+
+    // MARK: - Body
+
+    var body: some View {
+        Section(header: SectionHeaderView(text: "Villager Visits", icon: 
+"house.fill")) {
+            if collection.residents.isEmpty {
+                Text("Add villagers as residents to track your daily visits.")
+                    .style(appStyle: .rowDescription)
+                    .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(collection.residents) { villager in
+                        HStack {
+                            Button(action: {
+                                collection.toggleVisitedResident(villager: 
+villager)
+                                FeedbackGenerator.shared.triggerSelection()
+                            }) {
+                                Image(systemName: 
+collection.visitedResidents.contains(villager) ? "checkmark.circle.fill" : 
+"circle")
+                                    .foregroundColor(collection.visitedResidents
+.contains(villager) ? .acTabBarBackground : .acSecondaryText)
+                                    .imageScale(.large)
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+
+                            ItemImage(path: 
+ACNHApiService.BASE_URL.absoluteString +
+                                ACNHApiService.Endpoint.villagerIcon(id: 
+villager.id).path(),
+                                      size: 44)
+
+                            Text(villager.localizedName)
+                                .style(appStyle: .rowTitle)
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                        .onLongPressGesture {
+                            self.selectedVillager = villager
+                        }
+                    }
+
+                    if !collection.visitedResidents.isEmpty {
+                        HStack {
+                            Spacer()
+                            Text("Reset")
+                                .onTapGesture {
+                                    self.collection.resetVisitedResidents()
+                                }
+                                .foregroundColor(.acText)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 14)
+                                .background(Color.acText.opacity(0.2))
+                                .mask(RoundedRectangle(cornerRadius: 14, style: 
+.continuous))
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+            }
+        }
+        .sheet(item: $selectedVillager) { villager in
+            NavigationView {
+                VillagerDetailView(villager: villager)
+            }
+        }
+    }
+}
+
+// MARK: - Preview
+
+#if DEBUG
+struct TodayVillagerVisitsSection_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationView {
+            List {
+                TodayVillagerVisitsSection()
+            }
+            .listStyle(GroupedListStyle())
+            .environment(\.horizontalSizeClass, .regular)
+        }
+        .previewLayout(.sizeThatFits)
+        .environmentObject(UserCollection.shared)
+    }
+}
+#endif
+EOF
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 22, $1.06):
+**Step 4: Update `TodaySectionView` to handle the new section**
+
+```
+sed -i 's/        case .nookazon:/        case .villagerVisits:\n            
+return AnyView(TodayVillagerVisitsSection())\n        case .nookazon:/' 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 23, $1.13):
+**Step 5: Update `TodaySectionEditView` with section name and icon for 
+`villagerVisits`**
+
+```
+sed -i 's/        case .nookazon: return "New on Nookazon"/        case 
+.nookazon: return "New on Nookazon"\n        case .villagerVisits: return 
+"Villager Visits"/' 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionEditView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 24, $1.21):
+```
+sed -i 's/        case .nookazon: return "cart.fill"/        case .nookazon: 
+return "cart.fill"\n        case .villagerVisits: return "house.fill"/' 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionEditView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 25, $1.29):
+**Step 6: Add German localization**
+
+```
+echo '' >> /app/ACHNBrowserUI/ACHNBrowserUI/de.lproj/Localizable.strings
+echo '// Villager Visits' >> 
+/app/ACHNBrowserUI/ACHNBrowserUI/de.lproj/Localizable.strings
+echo '"Villager Visits" = "Bewohner-Besuche";' >> 
+/app/ACHNBrowserUI/ACHNBrowserUI/de.lproj/Localizable.strings
+echo '"Add villagers as residents to track your daily visits." = "Füge Bewohner 
+als Inselbewohner hinzu, um deine täglichen Besuche zu verfolgen.";' >> 
+/app/ACHNBrowserUI/ACHNBrowserUI/de.lproj/Localizable.strings
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 26, $1.37):
+Now let's verify all the changes look correct:
+
+```
+grep -n "visitedResidents\|toggleVisitedResident\|resetVisitedResidents" 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+27:    @Published public var visitedResidents: [Villager] = []
+284:    public func toggleVisitedResident(villager: Villager) {
+285:        if visitedResidents.contains(villager) {
+286:            visitedResidents.removeAll { $0 == villager }
+288:            visitedResidents.append(villager)
+292:    public func resetVisitedResidents() {
+293:        visitedResidents.removeAll()
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 27, $1.45):
+```
+grep -n "villagerVisits" 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/TodaySe
+ction.swift && echo "===" && grep -n "villagerVisits" 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionView.swift && 
+echo "===" && grep -n "villagerVisits" 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionEditView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+39:        case villagerVisits
+55:        TodaySection(name: .villagerVisits, enabled: true),
+===
+56:        case .villagerVisits:
+===
+88:        case .villagerVisits: return "Villager Visits"
+106:        case .villagerVisits: return "house.fill"
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 28, $1.53):
+```
+cat /app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+//
+//  TodaySectionView.swift
+//  ACHNBrowserUI
+//
+//  Created by theunimpossible on 5/24/20.
+//  Copyright © 2020 Thomas Ricouard. All rights reserved.
+//
+
+import SwiftUI
+import Backend
+
+struct TodaySectionView: View {
+    @EnvironmentObject var uiState: UIState
+    
+    let section: TodaySection
+    
+    @ObservedObject var viewModel: DashboardViewModel
+    @Binding var selectedSheet: Sheet.SheetType?
+
+
+    var body: some View {
+        makeView()
+    }
+
+    func makeView() -> some View {
+        if !section.enabled {
+            return AnyView(EmptyView())
+        }
+
+        switch(section.name) {
+        case .events:
+            return AnyView(TodayEventsSection())
+        case .specialCharacters:
+            return AnyView(TodaySpecialCharactersSection())
+        case .currentlyAvailable:
+            return AnyView(TodayCurrentlyAvailableSection())
+        case .collectionProgress:
+            return AnyView(TodayCollectionProgressSection(viewModel: viewModel, 
+sheet: $selectedSheet))
+        case .birthdays:
+            return AnyView(TodayBirthdaysSection())
+        case .turnips:
+            return AnyView(TodayTurnipSection()
+                .onTapGesture {
+                    self.uiState.selectedTab = .turnips
+            })
+        case .subscribe:
+            return AnyView(TodaySubscribeSection(sheet: $selectedSheet))
+        case .mysteryIsland:
+            return AnyView(TodayMysteryIslandsSection())
+        case .music:
+            return AnyView(TodayMusicPlayerSection())
+        case .tasks:
+            return AnyView(TodayTasksSection(sheet: $selectedSheet))
+        case .chores:
+            return AnyView(TodayChoresSection())
+        case .villagerVisits:
+            return AnyView(TodayVillagerVisitsSection())
+        case .nookazon:
+            return AnyView(TodayNookazonSection(sheet: $selectedSheet, 
+viewModel: viewModel))
+        }
+    }
+}
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 29, $1.62):
+```
+cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayVillagerVisitsSection
+.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+//
+//  TodayVillagerVisitsSection.swift
+//  ACHNBrowserUI
+//
+
+import SwiftUI
+import Backend
+import UI
+
+struct TodayVillagerVisitsSection: View {
+
+    // MARK: - Properties
+
+    @EnvironmentObject private var collection: UserCollection
+    @State private var selectedVillager: Villager? = nil
+
+    // MARK: - Body
+
+    var body: some View {
+        Section(header: SectionHeaderView(text: "Villager Visits", icon: 
+"house.fill")) {
+            if collection.residents.isEmpty {
+                Text("Add villagers as residents to track your daily visits.")
+                    .style(appStyle: .rowDescription)
+                    .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(collection.residents) { villager in
+                        HStack {
+                            Button(action: {
+                                collection.toggleVisitedResident(villager: 
+villager)
+                                FeedbackGenerator.shared.triggerSelection()
+                            }) {
+                                Image(systemName: 
+collection.visitedResidents.contains(villager) ? "checkmark.circle.fill" : 
+"circle")
+                                    .foregroundColor(collection.visitedResidents
+.contains(villager) ? .acTabBarBackground : .acSecondaryText)
+                                    .imageScale(.large)
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+
+                            ItemImage(path: 
+ACNHApiService.BASE_URL.absoluteString +
+                                ACNHApiService.Endpoint.villagerIcon(id: 
+villager.id).path(),
+                                      size: 44)
+
+                            Text(villager.localizedName)
+                                .style(appStyle: .rowTitle)
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                        .onLongPressGesture {
+                            self.selectedVillager = villager
+                        }
+                    }
+
+                    if !collection.visitedResidents.isEmpty {
+                        HStack {
+                            Spacer()
+                            Text("Reset")
+                                .onTapGesture {
+                                    self.collection.resetVisitedResidents()
+                                }
+                                .foregroundColor(.acText)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 14)
+                                .background(Color.acText.opacity(0.2))
+                                .mask(RoundedRectangle(cornerRadius: 14, style: 
+.continuous))
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+            }
+        }
+        .sheet(item: $selectedVillager) { villager in
+            NavigationView {
+                VillagerDetailView(villager: villager)
+            }
+        }
+    }
+}
+
+// MARK: - Preview
+
+#if DEBUG
+struct TodayVillagerVisitsSection_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationView {
+            List {
+                TodayVillagerVisitsSection()
+            }
+            .listStyle(GroupedListStyle())
+            .environment(\.horizontalSizeClass, .regular)
+        }
+        .previewLayout(.sizeThatFits)
+        .environmentObject(UserCollection.shared)
+    }
+}
+#endif
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 30, $1.70):
+Now let me check the test file to make sure we meet all requirements:
+
+```
+cat 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Tests/BackendTests/CollectionT
+est.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+import XCTest
+@testable import Backend
+
+final class CollectionTests: XCTestCase {
+    let collection = UserCollection(iCloudDisabled: true)
+    
+    func testUserCollectionToggleItem() {
+        _ = collection.toggleItem(item: static_item)
+        XCTAssert(collection.items.count == 1, "items should have one item")
+        
+        _ = collection.toggleItem(item: static_item)
+        XCTAssert(collection.items.isEmpty, "items should be empty")
+    }
+    
+    func testUserCollectionToggleCritters() {
+        _ = collection.toggleCritters(critter: static_item)
+        XCTAssert(collection.critters.count == 1, "critters should have one 
+item")
+        
+        _ = collection.toggleCritters(critter: static_item)
+        XCTAssert(collection.critters.isEmpty, "critters should be empty")
+    }
+    
+    func testUserCollectionToggleVillager() {
+        _ = collection.toggleVillager(villager: static_villager)
+        XCTAssert(collection.villagers.count == 1, "villagers should have one 
+item")
+        
+        _ = collection.toggleVillager(villager: static_villager)
+        XCTAssert(collection.villagers.isEmpty, "villagers should be empty")
+    }
+}
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 31, $1.79):
+```
+find /app -name "*.swift" -path "*/Tests/*" | head -20
+```
+
+Tool:
+<returncode>
+0
+<output>
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Tests/BackendTests/ItemsTests.
+swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Tests/BackendTests/CollectionT
+est.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Tests/BackendTests/CrittersTes
+ts.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/UI/Tests/UITests/UITests.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/UI/Tests/UITests/XCTestManifests.swift
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 32, $1.88):
+```
+find /app -name "Package.swift" | head -5 && echo "===" && ls 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/
+```
+
+Tool:
+<returncode>
+0
+<output>
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Package.swift
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/UI/Package.swift
+===
+Package.resolved
+Package.swift
+README.md
+Sources
+Tests
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 33, $1.97):
+```
+cd /app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend && swift test 2>&1 | tail 
+-30
+```
+
+Tool:
+<returncode>
+0
+<output>
+/bin/sh: 1: swift: not found
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 34, $2.06):
+```
+which xcodebuild swift-build 2>/dev/null; ls /usr/bin/swift* 2>/dev/null; ls 
+/usr/local/bin/swift* 2>/dev/null; find / -name "swift" -type f 2>/dev/null | 
+head -5
+```
+
+Tool:
+<returncode>
+0
+<output>
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 35, $2.15):
+Swift is not available in this environment to run tests. Let me do a thorough 
+code review to make sure everything is correct:
+
+```
+nl -ba 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift | sed -n '15,50p'
+```
+
+Tool:
+<returncode>
+0
+<output>
+    15      public static let shared = UserCollection(iCloudDisabled: false)
+    16      
+    17      // MARK: - Published properties
+    18      @Published public var items: [Item] = []
+    19      @Published public var variants: [String: [Variant]] = [:]
+    20      @Published public var villagers: [Villager] = []
+    21      @Published public var residents: [Villager] = []
+    22      @Published public var critters: [Item] = []
+    23      @Published public var lists: [UserList] = []
+    24      @Published public var designs: [Design] = []
+    25      @Published public var dailyCustomTasks = DailyCustomTasks()
+    26      @Published public var chores: [Chore] = []
+    27      @Published public var visitedResidents: [Villager] = []
+    28      
+    29      @Published public var isCloudEnabled = true
+    30      @Published public var isSynched = false
+    31      
+    32      // MARK: - Private properties
+    33      private struct SavedData: Codable {
+    34          let items: [Item]
+    35          let variants: [String: [Variant]]?
+    36          let villagers: [Villager]
+    37          let residents: [Villager]?
+    38          let critters: [Item]
+    39          let lists: [UserList]?
+    40          let dailyCustomTasks: DailyCustomTasks?
+    41          let designs: [Design]?
+    42          let chores: [Chore]?
+    43      }
+    44      
+    45      private let filePath: URL
+    46      private let encoder = JSONEncoder()
+    47      private let decoder = JSONDecoder()
+    48      
+    49      private let saveQueue = DispatchQueue(label: "achelper.save.queue")
+    50      
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 36, $2.24):
+```
+nl -ba 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift | sed -n '280,310p'
+```
+
+Tool:
+<returncode>
+0
+<output>
+   280      }
+   281  
+   282      // MARK: - Villager Visits
+   283  
+   284      public func toggleVisitedResident(villager: Villager) {
+   285          if visitedResidents.contains(villager) {
+   286              visitedResidents.removeAll { $0 == villager }
+   287          } else {
+   288              visitedResidents.append(villager)
+   289          }
+   290      }
+   291  
+   292      public func resetVisitedResidents() {
+   293          visitedResidents.removeAll()
+   294      }
+   295  
+   296      public func updateChore(_ chore: Chore) {
+   297          guard let index = chores.firstIndex(of: chore) else { return }
+   298          chores[index] = chore
+   299          save()
+   300      }
+   301  
+   302      // MARK: - CloudKit
+   303      private func checkiCloudStatus() {
+   304          CKContainer.default().accountStatus { (status, error) in
+   305              if error != nil || status != .available {
+   306                  DispatchQueue.main.async {
+   307                      self.isCloudEnabled = false
+   308                  }
+   309              } else {
+   310                  self.cloudKitDatabase = 
+CKContainer.default().privateCloudDatabase
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 37, $2.34):
+Let me also verify the `TodaySectionEditView.swift` looks correct:
+
+```
+grep -n "villagerVisits\|nookazon" 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionEditView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+87:        case .nookazon: return "New on Nookazon"
+88:        case .villagerVisits: return "Villager Visits"
+105:        case .nookazon: return "cart.fill"
+106:        case .villagerVisits: return "house.fill"
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 38, $2.43):
+```
+tail -10 /app/ACHNBrowserUI/ACHNBrowserUI/de.lproj/Localizable.strings
+```
+
+Tool:
+<returncode>
+0
+<output>
+"All" = "Alle";
+"Liked" = "Gefällt mir";
+"Residents" = "Bewohner";
+
+// Added 2020-06-05
+"Contact / follow us on Twitter" = "Kontaktiere / folge uns auf Twitter";
+
+// Villager Visits
+"Villager Visits" = "Bewohner-Besuche";
+"Add villagers as residents to track your daily visits." = "Füge Bewohner als 
+Inselbewohner hinzu, um deine täglichen Besuche zu verfolgen.";
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 39, $2.53):
+All the changes are in place. Let me do a final comprehensive review to verify 
+everything meets the acceptance criteria:
+
+```
+echo "=== 1. TodaySection.Name.villagerVisits ===" && grep "villagerVisits" 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/TodaySe
+ction.swift
+echo ""
+echo "=== 2. UserCollection.visitedResidents, toggleVisitedResident, 
+resetVisitedResidents ===" && grep -n 
+"visitedResidents\|toggleVisitedResident\|resetVisitedResidents" 
+/app/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/U
+serCollection.swift
+echo ""
+echo "=== 3. Long-press opens villager detail (TodayVillagerVisitsSection) ===" 
+&& grep -n "onLongPressGesture\|selectedVillager\|VillagerDetailView" 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayVillagerVisitsSection
+.swift
+echo ""
+echo "=== 4. Reset button hidden when no visited residents ===" && grep -n 
+"visitedResidents.isEmpty" 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodayVillagerVisitsSection
+.swift
+echo ""
+echo "=== 5. German localization ===" && grep -n "Villager 
+Visits\|Bewohner-Besuche" 
+/app/ACHNBrowserUI/ACHNBrowserUI/de.lproj/Localizable.strings
+echo ""
+echo "=== 6. Existing sections unchanged ===" && grep -n "case .chores:\|case 
+.tasks:\|case .events:" 
+/app/ACHNBrowserUI/ACHNBrowserUI/views/todayDashboard/TodaySectionView.swift
+```
+
+Tool:
+<returncode>
+0
+<output>
+=== 1. TodaySection.Name.villagerVisits ===
+        case villagerVisits
+        TodaySection(name: .villagerVisits, enabled: true),
+
+=== 2. UserCollection.visitedResidents, toggleVisitedResident, 
+resetVisitedResidents ===
+27:    @Published public var visitedResidents: [Villager] = []
+284:    public func toggleVisitedResident(villager: Villager) {
+285:        if visitedResidents.contains(villager) {
+286:            visitedResidents.removeAll { $0 == villager }
+288:            visitedResidents.append(villager)
+292:    public func resetVisitedResidents() {
+293:        visitedResidents.removeAll()
+
+=== 3. Long-press opens villager detail (TodayVillagerVisitsSection) ===
+15:    @State private var selectedVillager: Villager? = nil
+50:                        .onLongPressGesture {
+51:                            self.selectedVillager = villager
+76:        .sheet(item: $selectedVillager) { villager in
+78:                VillagerDetailView(villager: villager)
+
+=== 4. Reset button hidden when no visited residents ===
+55:                    if !collection.visitedResidents.isEmpty {
+
+=== 5. German localization ===
+858:// Villager Visits
+859:"Villager Visits" = "Bewohner-Besuche";
+
+=== 6. Existing sections unchanged ===
+31:        case .events:
+52:        case .tasks:
+54:        case .chores:
+
+────────────────────────────────────────────────────────────────────────────────
+
+mini-swe-agent (step 40, $2.64):
+All acceptance criteria are met. Let me provide a summary of the changes made:
+
+## Summary of Changes
+
+### 1. `TodaySection.swift` (Backend model)
+- Added `case villagerVisits` to the `TodaySection.Name` enum
+- Added `TodaySection(name: .villagerVisits, enabled: true)` to 
+`defaultSectionList`
+
+### 2. `UserCollection.swift` (Backend environment)
+- Added `@Published public var visitedResidents: [Villager] = []` property
+- Added `toggleVisitedResident(villager:)` method — toggles a villager's visited
+state
+- Added `resetVisitedResidents()` method — clears all visited states
+
+### 3. `TodayVillagerVisitsSection.swift` (New view file)
+- New SwiftUI view that shows the "Villager Visits" section on the dashboard
+- Lists all residents with a checkmark toggle button for each
+- Long-press on any villager opens `VillagerDetailView` in a sheet
+- Reset button only shown when at least one resident has been visited
+
+### 4. `TodaySectionView.swift`
+- Added `case .villagerVisits:` to the switch statement to render the new 
+section
+
+### 5. `TodaySectionEditView.swift`
+- Added `case .villagerVisits: return "Villager Visits"` to `sectionName`
+- Added `case .villagerVisits: return "house.fill"` to `iconName`
+
+### 6. `de.lproj/Localizable.strings`
+- Added German translations for "Villager Visits" → "Bewohner-Besuche" and the 
+empty state message
+
+```
+echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+```
+
+Tool:
+<returncode>
+-1
+<output>
+
+<exception_info>
+action was not executed
+
+Exit:
+
+Saved trajectory to '/workspace/output/trajectory.traj.json'
+
+=== Files in /workspace/output:
+total 360
+drwxr-xr-x 2 root root     34 Mar 26 06:28 .
+drwxr-xr-x 3 root root     28 Mar 26 06:28 ..
+-rw-r--r-- 1 root root 367250 Mar 26 06:31 trajectory.traj.json

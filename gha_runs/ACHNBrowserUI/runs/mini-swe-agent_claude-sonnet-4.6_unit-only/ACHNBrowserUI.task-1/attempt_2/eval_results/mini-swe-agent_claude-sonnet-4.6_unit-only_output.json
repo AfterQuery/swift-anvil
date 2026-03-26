@@ -1,0 +1,9 @@
+{
+  "tests": [
+    {
+      "name": "compilation",
+      "status": "FAILED",
+      "message": "Build timed out (600s)"
+    }
+  ]
+}

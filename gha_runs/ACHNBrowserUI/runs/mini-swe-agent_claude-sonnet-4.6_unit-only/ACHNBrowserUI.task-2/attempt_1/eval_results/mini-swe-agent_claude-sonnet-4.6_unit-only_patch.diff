@@ -1,0 +1,185 @@
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/packages/UI/Sources/UI/GridStack.swift b/ACHNBrowserUI/ACHNBrowserUI/packages/UI/Sources/UI/GridStack.swift
+new file mode 100644
+index 0000000..6ae4909
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/packages/UI/Sources/UI/GridStack.swift
+@@ -0,0 +1,42 @@
++//
++//  GridStack.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI contributors.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++
++/// A view that arranges its children in a grid with a fixed number of rows and columns.
++/// Columns are equally sized so that values align vertically across rows.
++public struct GridStack<Content: View>: View {
++    public let rows: Int
++    public let columns: Int
++    public let spacing: CGFloat?
++    private let content: (Int, Int) -> Content
++
++    public init(
++        rows: Int,
++        columns: Int,
++        spacing: CGFloat? = nil,
++        @ViewBuilder content: @escaping (Int, Int) -> Content
++    ) {
++        self.rows = rows
++        self.columns = columns
++        self.spacing = spacing
++        self.content = content
++    }
++
++    public var body: some View {
++        VStack(spacing: spacing) {
++            ForEach(0..<rows, id: \.self) { row in
++                HStack(spacing: self.spacing) {
++                    ForEach(0..<self.columns, id: \.self) { col in
++                        self.content(row, col)
++                    }
++                }
++            }
++        }
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
+index 6fbd2c8..7a66715 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/TurnipsView.swift
+@@ -7,6 +7,7 @@
+ //
+ 
+ import SwiftUI
++import UI
+ import SwiftUIKit
+ import Backend
+ 
+@@ -156,12 +157,14 @@ extension TurnipsView {
+                         Text("Profits estimates are computed using the average of the current period")
+                             .foregroundColor(.acSecondaryText)
+                     }
+-                    HStack {
+-                        Text("Day").fontWeight(.bold)
+-                        Spacer()
+-                        Text("AM").fontWeight(.bold)
+-                        Spacer()
+-                        Text("PM").fontWeight(.bold)
++                    GridStack(rows: 1, columns: 3) { _, col in
++                        if col == 0 {
++                            Text("Day").fontWeight(.bold).frame(maxWidth: .infinity, alignment: .leading)
++                        } else if col == 1 {
++                            Text("AM").fontWeight(.bold).frame(maxWidth: .infinity, alignment: .center)
++                        } else {
++                            Text("PM").fontWeight(.bold).frame(maxWidth: .infinity, alignment: .center)
++                        }
+                     }
+                 }
+                 if turnipsDisplay == .average {
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsAveragePriceRow.swift b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsAveragePriceRow.swift
+index e6edb8f..596e034 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsAveragePriceRow.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsAveragePriceRow.swift
+@@ -7,6 +7,7 @@
+ //
+ 
+ import SwiftUI
++import UI
+ 
+ struct TurnipsAveragePriceRow: View {
+     let label: String
+@@ -14,20 +15,25 @@ struct TurnipsAveragePriceRow: View {
+     let minMaxPrices: [[Int]]
+ 
+     var body: some View {
+-        HStack {
+-            Text(LocalizedStringKey(label))
+-                .font(.body)
+-                .foregroundColor(.acText)
+-            Spacer()
+-            Text("\(prices.first!)")
+-                .font(.headline)
+-                .fontWeight(.bold)
+-                .foregroundColor(color(meridian: .am))
+-            Spacer()
+-            Text("\(prices.last!)")
+-                .font(.headline)
+-                .fontWeight(.bold)
+-                .foregroundColor(color(meridian: .pm))
++        GridStack(rows: 1, columns: 3) { _, col in
++            if col == 0 {
++                Text(LocalizedStringKey(label))
++                    .font(.body)
++                    .foregroundColor(.acText)
++                    .frame(maxWidth: .infinity, alignment: .leading)
++            } else if col == 1 {
++                Text("\(prices.first!)")
++                    .font(.headline)
++                    .fontWeight(.bold)
++                    .foregroundColor(color(meridian: .am))
++                    .frame(maxWidth: .infinity, alignment: .center)
++            } else {
++                Text("\(prices.last!)")
++                    .font(.headline)
++                    .fontWeight(.bold)
++                    .foregroundColor(color(meridian: .pm))
++                    .frame(maxWidth: .infinity, alignment: .center)
++            }
+         }
+     }
+ }
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsMinMaxPriceRow.swift b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsMinMaxPriceRow.swift
+index 5a311a9..4740a72 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsMinMaxPriceRow.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/turnips/rows/TurnipsMinMaxPriceRow.swift
+@@ -7,6 +7,7 @@
+ //
+ 
+ import SwiftUI
++import UI
+ 
+ struct TurnipsMinMaxPriceRow: View {
+     let label: String
+@@ -16,20 +17,25 @@ struct TurnipsMinMaxPriceRow: View {
+     typealias Meridian = TurnipsAveragePriceRow.Meridian
+ 
+     var body: some View {
+-        HStack {
+-            Text(LocalizedStringKey(label))
+-                .font(.body)
+-                .foregroundColor(.acText)
+-            Spacer()
+-            Text(amMinMaxPrices)
+-                .font(.headline)
+-                .fontWeight(.bold)
+-                .foregroundColor(color(meridian: .am))
+-            Spacer()
+-            Text(pmMinMaxPrices)
+-                .font(.headline)
+-                .fontWeight(.bold)
+-                .foregroundColor(color(meridian: .pm))
++        GridStack(rows: 1, columns: 3) { _, col in
++            if col == 0 {
++                Text(LocalizedStringKey(label))
++                    .font(.body)
++                    .foregroundColor(.acText)
++                    .frame(maxWidth: .infinity, alignment: .leading)
++            } else if col == 1 {
++                Text(amMinMaxPrices)
++                    .font(.headline)
++                    .fontWeight(.bold)
++                    .foregroundColor(color(meridian: .am))
++                    .frame(maxWidth: .infinity, alignment: .center)
++            } else {
++                Text(pmMinMaxPrices)
++                    .font(.headline)
++                    .fontWeight(.bold)
++                    .foregroundColor(color(meridian: .pm))
++                    .frame(maxWidth: .infinity, alignment: .center)
++            }
+         }
+     }
+ }

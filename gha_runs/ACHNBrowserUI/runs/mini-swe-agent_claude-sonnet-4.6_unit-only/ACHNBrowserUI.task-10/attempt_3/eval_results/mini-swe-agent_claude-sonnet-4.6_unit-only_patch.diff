@@ -1,0 +1,1053 @@
+diff --git a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+index 77ce1da..603880f 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
++++ b/ACHNBrowserUI/ACHNBrowserUI.xcodeproj/project.pbxproj
+@@ -7,6 +7,15 @@
+ 	objects = {
+ 
+ /* Begin PBXBuildFile section */
++		AA0000022471A5A1005B9001 /* DesignFormViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000012471A5A1005B9001 /* DesignFormViewModel.swift */; };
++		AA0000042471A5A1005B9001 /* DesignRowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000032471A5A1005B9001 /* DesignRowViewModel.swift */; };
++		AA0000062471A5A1005B9001 /* CollectionMoreDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000052471A5A1005B9001 /* CollectionMoreDetailViewModel.swift */; };
++		AA0000082471A5A1005B9001 /* MessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000072471A5A1005B9001 /* MessageView.swift */; };
++		AA000000A2471A5A1005B9001 /* CollectionMoreDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000092471A5A1005B9001 /* CollectionMoreDetailView.swift */; };
++		AA000000D2471A5A1005B9001 /* DesignFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000C2471A5A1005B9001 /* DesignFormView.swift */; };
++		AA000000F2471A5A1005B9001 /* DesignRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000E2471A5A1005B9001 /* DesignRowView.swift */; };
++		AA0000112471A5A1005B9001 /* DesignListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000102471A5A1005B9001 /* DesignListView.swift */; };
++
+ 		157C03E7247AE56600568917 /* TodaySectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 157C03E6247AE56600568917 /* TodaySectionView.swift */; };
+ 		4C16FB41247AC9B0009F24E3 /* GridStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C16FB40247AC9B0009F24E3 /* GridStack.swift */; };
+ 		690A72C924752BF4001E7294 /* villagersLikes in Resources */ = {isa = PBXBuildFile; fileRef = 690A72C824752BF4001E7294 /* villagersLikes */; };
+@@ -189,6 +198,15 @@
+ /* End PBXCopyFilesBuildPhase section */
+ 
+ /* Begin PBXFileReference section */
++		AA0000012471A5A1005B9001 /* DesignFormViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignFormViewModel.swift; sourceTree = "<group>"; };
++		AA0000032471A5A1005B9001 /* DesignRowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignRowViewModel.swift; sourceTree = "<group>"; };
++		AA0000052471A5A1005B9001 /* CollectionMoreDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionMoreDetailViewModel.swift; sourceTree = "<group>"; };
++		AA0000072471A5A1005B9001 /* MessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageView.swift; sourceTree = "<group>"; };
++		AA0000092471A5A1005B9001 /* CollectionMoreDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionMoreDetailView.swift; sourceTree = "<group>"; };
++		AA000000C2471A5A1005B9001 /* DesignFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignFormView.swift; sourceTree = "<group>"; };
++		AA000000E2471A5A1005B9001 /* DesignRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignRowView.swift; sourceTree = "<group>"; };
++		AA0000102471A5A1005B9001 /* DesignListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignListView.swift; sourceTree = "<group>"; };
++
+ 		024363D02465EA14006A37A0 /* TodayCurrentlyAvailableSection.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TodayCurrentlyAvailableSection.swift; sourceTree = "<group>"; };
+ 		024363D12465EA14006A37A0 /* TodayTurnipSection.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TodayTurnipSection.swift; sourceTree = "<group>"; };
+ 		024363D22465EA14006A37A0 /* TodayView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+@@ -640,6 +658,7 @@
+ 				6942FC38244989470062FE8F /* listing */,
+ 				69C5F5E8244217EF00BF8FA4 /* categories */,
+ 				69BEA983243E638C00F02C61 /* collection */,
++				AA000000B2471A5A1005B9001 /* designs */,
+ 				69BEA982243E609400F02C61 /* items */,
+ 				69BEA981243E608E00F02C61 /* shared */,
+ 				69BEA980243E608900F02C61 /* home */,
+@@ -660,6 +679,9 @@
+ 				6941F3872452BDDD00EC2E02 /* CategoriesSearchViewModel.swift */,
+ 				695D45FA24671B1800B5C313 /* VillagerDetailViewModel.swift */,
+ 				69867DF0247C136900C6A759 /* CollectionProgressRowViewModel.swift */,
++				AA0000012471A5A1005B9001 /* DesignFormViewModel.swift */,
++				AA0000032471A5A1005B9001 /* DesignRowViewModel.swift */,
++				AA0000052471A5A1005B9001 /* CollectionMoreDetailViewModel.swift */,
+ 			);
+ 			path = viewModels;
+ 			sourceTree = "<group>";
+@@ -706,6 +728,7 @@
+ 				69875F4F24652A4700B1D46C /* Sheet.swift */,
+ 				693E2BBD2465B65D00B85CB8 /* RowLoadingView.swift */,
+ 				4C16FB40247AC9B0009F24E3 /* GridStack.swift */,
++				AA0000072471A5A1005B9001 /* MessageView.swift */,
+ 			);
+ 			path = shared;
+ 			sourceTree = "<group>";
+@@ -720,6 +743,16 @@
+ 			path = items;
+ 			sourceTree = "<group>";
+ 		};
++		AA000000B2471A5A1005B9001 /* designs */ = {
++			isa = PBXGroup;
++			children = (
++				AA000000C2471A5A1005B9001 /* DesignFormView.swift */,
++				AA000000E2471A5A1005B9001 /* DesignRowView.swift */,
++				AA0000102471A5A1005B9001 /* DesignListView.swift */,
++			);
++			path = designs;
++			sourceTree = "<group>";
++		};
+ 		69BEA983243E638C00F02C61 /* collection */ = {
+ 			isa = PBXGroup;
+ 			children = (
+@@ -727,6 +760,7 @@
+ 				6903CD0E246C7E0300150FA1 /* CollectionProgressDetailView.swift */,
+ 				6903CD10246C7EB800150FA1 /* CollectionProgressRow.swift */,
+ 				4F92A4522470AC01003A2911 /* CollectionRowView.swift */,
++				AA0000092471A5A1005B9001 /* CollectionMoreDetailView.swift */,
+ 			);
+ 			path = collection;
+ 			sourceTree = "<group>";
+@@ -1102,6 +1136,14 @@
+ 				69157BD72471A5A1005B9002 /* TodaySectionEditView.swift in Sources */,
+ 				69157BD82471A5A1005B9002 /* VillagersViewModel.swift in Sources */,
+ 				FA0EC271247B77E400447D7E /* VillagersSortView.swift in Sources */,
++				AA0000022471A5A1005B9001 /* DesignFormViewModel.swift in Sources */,
++				AA0000042471A5A1005B9001 /* DesignRowViewModel.swift in Sources */,
++				AA0000062471A5A1005B9001 /* CollectionMoreDetailViewModel.swift in Sources */,
++				AA0000082471A5A1005B9001 /* MessageView.swift in Sources */,
++				AA000000A2471A5A1005B9001 /* CollectionMoreDetailView.swift in Sources */,
++				AA000000D2471A5A1005B9001 /* DesignFormView.swift in Sources */,
++				AA000000F2471A5A1005B9001 /* DesignRowView.swift in Sources */,
++				AA0000112471A5A1005B9001 /* DesignListView.swift in Sources */,
+ 			);
+ 			runOnlyForDeploymentPostprocessing = 0;
+ 		};
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/UserCollection.swift b/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/UserCollection.swift
+index 3ecc96d..8411f83 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/UserCollection.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/UserCollection.swift
+@@ -19,6 +19,7 @@ public class UserCollection: ObservableObject {
+     @Published public var villagers: [Villager] = []
+     @Published public var critters: [Item] = []
+     @Published public var lists: [UserList] = []
++    @Published public var designs: [Design] = []
+     @Published public var dailyTasks = DailyTasks()
+     
+     @Published public var isCloudEnabled = true
+@@ -31,6 +32,7 @@ public class UserCollection: ObservableObject {
+         let villagers: [Villager]
+         let critters: [Item]
+         let lists: [UserList]?
++        let designs: [Design]?
+         let dailyTasks: DailyTasks?
+     }
+     
+@@ -177,6 +179,24 @@ public class UserCollection: ObservableObject {
+         save()
+     }
+     
++    // MARK: - Designs management
++    public func addDesign(design: Design) {
++        designs.append(design)
++        save()
++    }
++    
++    public func deleteDesign(at index: Int) {
++        designs.remove(at: index)
++        save()
++    }
++    
++    public func updateDesign(design: Design) {
++        if let index = designs.firstIndex(where: { $0.id == design.id }) {
++            designs[index] = design
++            save()
++        }
++    }
++    
+     // MARK: - CloudKit
+     private func checkiCloudStatus() {
+         CKContainer.default().accountStatus { (status, error) in
+@@ -267,6 +287,7 @@ public class UserCollection: ObservableObject {
+                                           villagers: weakself.villagers,
+                                           critters: weakself.critters,
+                                           lists: weakself.lists,
++                                          designs: weakself.designs,
+                                           dailyTasks: weakself.dailyTasks)
+                 let data = try weakself.encoder.encode(savedData)
+                 try data.write(to: weakself.filePath, options: .atomicWrite)
+@@ -294,6 +315,7 @@ public class UserCollection: ObservableObject {
+                 self.villagers = savedData.villagers
+                 self.critters = savedData.critters
+                 self.lists = savedData.lists ?? []
++                self.designs = savedData.designs ?? []
+                 self.dailyTasks = savedData.dailyTasks ?? DailyTasks()
+                 return true
+             } catch {
+@@ -310,6 +332,7 @@ public class UserCollection: ObservableObject {
+             self.villagers = []
+             self.critters = []
+             self.lists = []
++            self.designs = []
+             self.dailyTasks = DailyTasks()
+             save()
+             return true
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/UserCollection.swift.bak b/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/UserCollection.swift.bak
+new file mode 100644
+index 0000000..3ecc96d
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/environments/UserCollection.swift.bak
+@@ -0,0 +1,357 @@
++//
++//  CollectionViewModel.swift
++//  ACHNBrowserUI
++//
++//  Created by Thomas Ricouard on 08/04/2020.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import Foundation
++import Combine
++import CloudKit
++
++public class UserCollection: ObservableObject {
++    public static let shared = UserCollection(iCloudDisabled: false)
++    
++    // MARK: - Published properties
++    @Published public var items: [Item] = []
++    @Published public var variants: [String: [Variant]] = [:]
++    @Published public var villagers: [Villager] = []
++    @Published public var critters: [Item] = []
++    @Published public var lists: [UserList] = []
++    @Published public var dailyTasks = DailyTasks()
++    
++    @Published public var isCloudEnabled = true
++    @Published public var isSynched = false
++    
++    // MARK: - Private properties
++    private struct SavedData: Codable {
++        let items: [Item]
++        let variants: [String: [Variant]]?
++        let villagers: [Villager]
++        let critters: [Item]
++        let lists: [UserList]?
++        let dailyTasks: DailyTasks?
++    }
++    
++    private let filePath: URL
++    private let encoder = JSONEncoder()
++    private let decoder = JSONDecoder()
++    
++    private let saveQueue = DispatchQueue(label: "achelper.save.queue")
++    
++    private static let recordType = "UserCollection"
++    private static let recordId = CKRecord.ID(recordName: "CurrentUserCollection")
++    private static let assetKey = "data"
++    private var cloudKitDatabase: CKDatabase? = nil
++    private var currentRecord: CKRecord? = nil
++    
++    public init(iCloudDisabled: Bool) {
++        do {
++            filePath = try FileManager.default.url(for: .documentDirectory,
++                                                   in: .userDomainMask,
++                                                   appropriateFor: nil,
++                                                   create: false).appendingPathComponent("collection")
++            _ = self.loadCollection(file: filePath)
++            
++            if !iCloudDisabled {
++                checkiCloudStatus()
++            } else {
++                isCloudEnabled = false
++            }
++                        
++        } catch let error {
++            fatalError(error.localizedDescription)
++        }
++    }
++    
++    // MARK: - Items management
++    public func itemsIn(category: Category, items: [Item]) -> Int {
++        let allItems = Items.shared.categories[category] ?? []
++        let inCollection = items.count(where: { allItems.contains($0) && !$0.name.contains("(fake)") })
++        return inCollection
++    }
++    
++    public func itemsIn(category: Category) -> Int {
++        let items = Items.shared.categories[category] ?? []
++        var caught = self.critters.count(where: { items.contains($0) } )
++        caught += self.items.count(where: { items.contains($0) && !$0.name.contains("(fake)") })
++        return caught
++    }
++
++    public func toggleItem(item: Item) -> Bool {
++        let added = items.toggle(item: item)
++        save()
++        return added
++    }
++    
++    public func variantIn(item: Item, variant: Variant) -> Bool {
++        guard let filename = item.filename else {
++            return false
++        }
++        return variants[filename]?.contains(variant) == true
++    }
++    
++    public func toggleVariant(item: Item, variant: Variant) -> Bool {
++        guard let filename = item.filename else {
++            return false
++        }
++        if variants[filename]?.contains(variant) == true {
++            variants[filename]?.removeAll(where: { $0 == variant })
++            save()
++            return false
++        } else {
++            if variants[filename] == nil {
++                variants[filename] = []
++            }
++            variants[filename]?.append(variant)
++            save()
++            return true
++        }
++    }
++    
++    public func toggleCritters(critter: Item) -> Bool {
++        let added = critters.toggle(item: critter)
++        save()
++        return added
++    }
++    
++    public func toggleVillager(villager: Villager) -> Bool {
++        var added = false
++        if villagers.contains(villager) {
++            villagers.removeAll(where: { $0 == villager })
++        } else {
++            villagers.append(villager)
++            added = true
++        }
++        save()
++        return added
++    }
++    
++    public func updateProgress(taskName: DailyTasks.taskName) {
++        dailyTasks.tasks[taskName]?.curProgress += 1
++        dailyTasks.lastUpdate = Date()
++        save()
++    }
++
++    public func resetProgress(taskName: DailyTasks.taskName) {
++        dailyTasks.tasks[taskName]?.curProgress = 0
++        dailyTasks.lastUpdate = Date()
++        save()
++    }
++    
++    public func resetTasks() {
++        dailyTasks.lastUpdate = Date()
++        for(taskName, _) in dailyTasks.tasks {
++            dailyTasks.tasks[taskName]?.curProgress = 0
++        }
++        save()
++    }
++    
++    // MARK: - User items list
++    public func addList(userList: UserList) {
++        lists.append(userList)
++        save()
++    }
++    
++    public func editList(userList: UserList) {
++        let index = lists.firstIndex(where: { $0.id == userList.id} )!
++        lists[index] = userList
++        save()
++    }
++    
++    public func deleteList(at index: Int) {
++        lists.remove(at: index)
++        save()
++    }
++    
++    public func addItems(for list: UUID, items: [Item]) {
++        let index = lists.firstIndex(where: { $0.id == list })!
++        lists[index].items.append(contentsOf: items)
++        save()
++    }
++    
++    public func deleteItem(for list: UUID, at: Int) {
++        let index = lists.firstIndex(where: { $0.id == list })!
++        lists[index].items.remove(at: at)
++        save()
++    }
++    
++    // MARK: - CloudKit
++    private func checkiCloudStatus() {
++        CKContainer.default().accountStatus { (status, error) in
++            if error != nil || status != .available {
++                DispatchQueue.main.async {
++                    self.isCloudEnabled = false
++                }
++            } else {
++                self.cloudKitDatabase = CKContainer.default().privateCloudDatabase
++                self.reloadFromCloudKit()
++                self.subscribeToCloudKit()
++            }
++        }
++    }
++    
++    private func subscribeToCloudKit() {
++        cloudKitDatabase?.fetchAllSubscriptions { (subs, _) in
++            if subs == nil || subs?.isEmpty == true {
++                self.createSubscription()
++            }
++        }
++    }
++    
++    private func createSubscription() {
++        let sub = CKQuerySubscription(recordType: Self.recordType,
++                                      predicate: NSPredicate(value: true),
++                                      options: .firesOnRecordUpdate)
++        let notif = CKSubscription.NotificationInfo()
++        notif.shouldSendContentAvailable = true
++        sub.notificationInfo = notif
++        cloudKitDatabase?.save(sub) { (_, _) in }
++    }
++    
++    public func reloadFromCloudKit() {
++        cloudKitDatabase?.fetch(withRecordID: Self.recordId) { (record, error) in
++            if record == nil {
++                DispatchQueue.main.async {
++                    self.save()
++                }
++            } else {
++                self.currentRecord = record
++                if let asset = record?[Self.assetKey] as? CKAsset,
++                    let url = asset.fileURL {
++                    DispatchQueue.main.async {
++                        self.isSynched = true
++                        _ = self.loadCollection(file: url)
++                        try? FileManager.default.removeItem(at: self.filePath)
++                        try? FileManager.default.copyItem(at: url, to: self.filePath)
++                    }
++                }
++            }
++        }
++    }
++    
++    private func saveToCloudKit() {
++        if let record = currentRecord {
++            record[Self.assetKey] = CKAsset(fileURL: filePath)
++            let modified = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
++            modified.savePolicy = .allKeys
++            modified.completionBlock = {
++                DispatchQueue.main.async {
++                    self.isSynched = true
++                }
++            }
++            cloudKitDatabase?.add(modified)
++        } else {
++            let record = CKRecord(recordType: Self.recordType,
++                                  recordID: Self.recordId)
++            let asset = CKAsset(fileURL: filePath)
++            record[Self.assetKey] = asset
++            
++            cloudKitDatabase?.save(record) { (record, error) in
++                DispatchQueue.main.async {
++                    self.currentRecord = record
++                    self.isSynched = true
++                }
++            }
++        }
++    }
++    
++    // MARK: - Import / Export
++    private func save() {
++        saveQueue.async { [weak self] in
++            guard let weakself = self else { return }
++            do {
++                let savedData = SavedData(items: weakself.items,
++                                          variants: weakself.variants,
++                                          villagers: weakself.villagers,
++                                          critters: weakself.critters,
++                                          lists: weakself.lists,
++                                          dailyTasks: weakself.dailyTasks)
++                let data = try weakself.encoder.encode(savedData)
++                try data.write(to: weakself.filePath, options: .atomicWrite)
++                
++                if weakself.isCloudEnabled {
++                    DispatchQueue.main.async {
++                        weakself.isSynched = false
++                        weakself.saveToCloudKit()
++                    }
++                }
++            } catch let error {
++                print("Error while saving collection: \(error.localizedDescription)")
++            }
++            weakself.encoder.dataEncodingStrategy = .base64
++        }
++    }
++    
++    private func loadCollection(file: URL) -> Bool {
++        if let data = try? Data(contentsOf: file) {
++            decoder.dataDecodingStrategy = .base64
++            do {
++                let savedData = try decoder.decode(SavedData.self, from: data)
++                self.items = savedData.items
++                self.variants = savedData.variants ?? [:]
++                self.villagers = savedData.villagers
++                self.critters = savedData.critters
++                self.lists = savedData.lists ?? []
++                self.dailyTasks = savedData.dailyTasks ?? DailyTasks()
++                return true
++            } catch {
++                return false
++            }
++        }
++        return false
++    }
++    
++    public func deleteCollection() -> Bool {
++        do {
++            try FileManager.default.removeItem(at: filePath)
++            self.items = []
++            self.villagers = []
++            self.critters = []
++            self.lists = []
++            self.dailyTasks = DailyTasks()
++            save()
++            return true
++        } catch {
++            return false
++        }
++    }
++    
++    public func generateExportURL() -> URL? {
++        do {
++            var sharedURL = try FileManager.default.url(for: .documentDirectory,
++                                                                    in: .userDomainMask,
++                                                                    appropriateFor: nil,
++                                                                    create: false)
++            sharedURL.appendPathComponent("exported-collection")
++            sharedURL.appendPathExtension("achelper")
++            try? FileManager.default.removeItem(at: sharedURL)
++            try FileManager.default.copyItem(at: filePath, to: sharedURL)
++            return sharedURL
++        } catch let error {
++            print(error.localizedDescription)
++            return nil
++        }
++    }
++    
++    public func sizeOfArchivedState() -> String {
++        do {
++            let resources = try filePath.resourceValues(forKeys:[.fileSizeKey])
++            let formatter = ByteCountFormatter()
++            formatter.allowedUnits = .useKB
++            formatter.countStyle = .file
++            return formatter.string(fromByteCount: Int64(resources.fileSize ?? 0))
++        } catch {
++            return "0"
++        }
++    }
++    
++    public func processImportedFile(url: URL) -> Bool {
++        let success = loadCollection(file: url)
++        if success {
++            save()
++        }
++        return success
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/Design.swift b/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/Design.swift
+new file mode 100644
+index 0000000..19903c1
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/packages/Backend/Sources/Backend/models/Design.swift
+@@ -0,0 +1,30 @@
++//
++//  Design.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI on 2020-06-01.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import Foundation
++
++public struct Design: Codable, Identifiable, Equatable {
++    public let id: UUID
++    public var title: String
++    public var code: String
++    public var description: String
++    
++    public var hasValidCode: Bool {
++        let cleaned = code.replacingOccurrences(of: "-", with: "").uppercased()
++        guard cleaned.count == 14 else { return false }
++        let prefix = String(cleaned.prefix(2))
++        return prefix == "MA" || prefix == "MO"
++    }
++    
++    public init(id: UUID = UUID(), title: String = "", code: String = "", description: String = "") {
++        self.id = id
++        self.title = title
++        self.code = code
++        self.description = description
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/viewModels/CollectionMoreDetailViewModel.swift b/ACHNBrowserUI/ACHNBrowserUI/viewModels/CollectionMoreDetailViewModel.swift
+new file mode 100644
+index 0000000..af6c2fa
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/viewModels/CollectionMoreDetailViewModel.swift
+@@ -0,0 +1,28 @@
++//
++//  CollectionMoreDetailViewModel.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI on 2020-06-01.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import Foundation
++import Backend
++
++class CollectionMoreDetailViewModel: ObservableObject {
++    enum Row: String, CaseIterable {
++        case critters
++        case designs
++        
++        var label: String {
++            switch self {
++            case .critters: return "Critters"
++            case .designs: return "Designs"
++            }
++        }
++    }
++    
++    var rows: [Row] {
++        return Row.allCases
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/viewModels/DesignFormViewModel.swift b/ACHNBrowserUI/ACHNBrowserUI/viewModels/DesignFormViewModel.swift
+new file mode 100644
+index 0000000..adc0c72
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/viewModels/DesignFormViewModel.swift
+@@ -0,0 +1,29 @@
++//
++//  DesignFormViewModel.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI on 2020-06-01.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++import Backend
++
++class DesignFormViewModel: ObservableObject {
++    @Published var design: Design
++    
++    private var editing: Bool
++    
++    init(design: Design?) {
++        self.editing = design != nil
++        self.design = design ?? Design()
++    }
++    
++    func save() {
++        if editing {
++            UserCollection.shared.updateDesign(design: design)
++        } else {
++            UserCollection.shared.addDesign(design: design)
++        }
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/viewModels/DesignRowViewModel.swift b/ACHNBrowserUI/ACHNBrowserUI/viewModels/DesignRowViewModel.swift
+new file mode 100644
+index 0000000..d0e5817
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/viewModels/DesignRowViewModel.swift
+@@ -0,0 +1,47 @@
++//
++//  DesignRowViewModel.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI on 2020-06-01.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import Foundation
++import Backend
++
++class DesignRowViewModel: ObservableObject {
++    let design: Design
++    
++    init(design: Design) {
++        self.design = design
++    }
++    
++    /// Returns "Creator" for MA-prefix codes, "Item" for MO-prefix codes
++    var category: String {
++        let cleaned = design.code.replacingOccurrences(of: "-", with: "").uppercased()
++        let prefix = String(cleaned.prefix(2))
++        if prefix == "MA" {
++            return "Creator"
++        } else {
++            return "Item"
++        }
++    }
++    
++    /// Formats the raw stored code as "XX-XXXX-XXXX-XXXX"
++    /// e.g. "MA667931515180" → "MA-6679-3151-5180"
++    var code: String {
++        let cleaned = design.code.replacingOccurrences(of: "-", with: "").uppercased()
++        guard cleaned.count >= 2 else { return design.code }
++        let prefix = String(cleaned.prefix(2))
++        let remainder = String(cleaned.dropFirst(2))
++        var groups: [String] = []
++        var index = remainder.startIndex
++        while index < remainder.endIndex {
++            let nextIndex = remainder.index(index, offsetBy: 4, limitedBy: remainder.endIndex) ?? remainder.endIndex
++            groups.append(String(remainder[index..<nextIndex]))
++            index = nextIndex
++        }
++        let groupStr = groups.joined(separator: "-")
++        return groupStr.isEmpty ? prefix : "\(prefix)-\(groupStr)"
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/collection/CollectionListView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/collection/CollectionListView.swift
+index 8c7665b..d11c506 100644
+--- a/ACHNBrowserUI/ACHNBrowserUI/views/collection/CollectionListView.swift
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/collection/CollectionListView.swift
+@@ -11,7 +11,7 @@ import SwiftUIKit
+ import Backend
+ 
+ enum Tabs: String, CaseIterable {
+-    case items, villagers, critters, lists
++    case items, villagers, lists, more
+ }
+ 
+ struct CollectionListView: View {
+@@ -38,15 +38,11 @@ struct CollectionListView: View {
+                                 VillagerRowView(villager: villager)
+                             }
+                         }
+-                    } else if selectedTab == .critters && !collection.critters.isEmpty {
+-                        ForEach(collection.critters) { critter in
+-                            NavigationLink(destination: ItemDetailView(item: critter)) {
+-                                ItemRowView(displayMode: .large, item: critter)
+-                            }
+-                        }
+                     } else if selectedTab == .lists {
+                         userListsSections
+-                    }  else {
++                    } else if selectedTab == .more {
++                        moreSection
++                    } else {
+                         emptyView
+                     }
+                 }
+@@ -64,6 +60,31 @@ struct CollectionListView: View {
+         }
+     }
+     
++    private var moreSection: some View {
++        Group {
++            NavigationLink(destination: CrittersCollectionView()) {
++                HStack {
++                    Text("Critters")
++                        .font(.headline)
++                        .foregroundColor(.acText)
++                    Spacer()
++                    Text("\(collection.critters.count)")
++                        .foregroundColor(.acSecondaryText)
++                }
++            }
++            NavigationLink(destination: DesignListView()) {
++                HStack {
++                    Text("Designs")
++                        .font(.headline)
++                        .foregroundColor(.acText)
++                    Spacer()
++                    Text("\(collection.designs.count)")
++                        .foregroundColor(.acSecondaryText)
++                }
++            }
++        }
++    }
++    
+     private var userListsSections: some View {
+         Group {
+             if subscriptionManager.subscriptionStatus == .subscribed || collection.lists.isEmpty {
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/collection/CollectionMoreDetailView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/collection/CollectionMoreDetailView.swift
+new file mode 100644
+index 0000000..92c10a2
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/collection/CollectionMoreDetailView.swift
+@@ -0,0 +1,72 @@
++//
++//  CollectionMoreDetailView.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI on 2020-06-01.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++import Backend
++
++struct CollectionMoreDetailView: View {
++    @ObservedObject private var viewModel = CollectionMoreDetailViewModel()
++    
++    var body: some View {
++        List {
++            ForEach(viewModel.rows, id: \.self) { row in
++                self.makeRowView(for: row)
++            }
++        }
++        .listStyle(GroupedListStyle())
++        .navigationBarTitle(Text("More"), displayMode: .inline)
++    }
++    
++    @ViewBuilder
++    private func makeRowView(for row: CollectionMoreDetailViewModel.Row) -> some View {
++        switch row {
++        case .critters:
++            NavigationLink(destination: CrittersCollectionView()) {
++                Text(row.label)
++                    .font(.headline)
++                    .foregroundColor(.acText)
++            }
++        case .designs:
++            NavigationLink(destination: DesignListView()) {
++                Text(row.label)
++                    .font(.headline)
++                    .foregroundColor(.acText)
++            }
++        }
++    }
++}
++
++struct CrittersCollectionView: View {
++    @EnvironmentObject private var collection: UserCollection
++    
++    var body: some View {
++        Group {
++            if collection.critters.isEmpty {
++                MessageView(collectionName: "critters")
++            } else {
++                List {
++                    ForEach(collection.critters) { critter in
++                        NavigationLink(destination: ItemDetailView(item: critter)) {
++                            ItemRowView(displayMode: .large, item: critter)
++                        }
++                    }
++                }
++            }
++        }
++        .navigationBarTitle(Text("Critters"), displayMode: .inline)
++    }
++}
++
++struct CollectionMoreDetailView_Previews: PreviewProvider {
++    static var previews: some View {
++        NavigationView {
++            CollectionMoreDetailView()
++        }
++        .environmentObject(UserCollection.shared)
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/designs/DesignFormView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/designs/DesignFormView.swift
+new file mode 100644
+index 0000000..7f6f9a1
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/designs/DesignFormView.swift
+@@ -0,0 +1,58 @@
++//
++//  DesignFormView.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI on 2020-06-01.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++import Backend
++
++struct DesignFormView: View {
++    @Environment(\.presentationMode) private var presentationMode
++    @ObservedObject private var viewModel: DesignFormViewModel
++    
++    init(design: Design? = nil) {
++        self.viewModel = DesignFormViewModel(design: design)
++    }
++    
++    var body: some View {
++        NavigationView {
++            Form {
++                Section(header: Text("Design Info")) {
++                    TextField("Name", text: $viewModel.design.title)
++                    TextField("Code (MA-XXXX-XXXX-XXXX)", text: $viewModel.design.code)
++                        .autocapitalization(.allCharacters)
++                        .disableAutocorrection(true)
++                    TextField("Description (optional)", text: $viewModel.design.description)
++                }
++                if !viewModel.design.code.isEmpty && !viewModel.design.hasValidCode {
++                    Section {
++                        Text("Code must start with MA or MO and contain 14 characters.")
++                            .foregroundColor(.red)
++                            .font(.caption)
++                    }
++                }
++            }
++            .navigationBarTitle(Text(viewModel.design.title.isEmpty ? "New Design" : viewModel.design.title),
++                                displayMode: .inline)
++            .navigationBarItems(
++                leading: Button("Cancel") {
++                    presentationMode.wrappedValue.dismiss()
++                },
++                trailing: Button("Save") {
++                    viewModel.save()
++                    presentationMode.wrappedValue.dismiss()
++                }
++                .disabled(viewModel.design.title.isEmpty || !viewModel.design.hasValidCode)
++            )
++        }
++    }
++}
++
++struct DesignFormView_Previews: PreviewProvider {
++    static var previews: some View {
++        DesignFormView()
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/designs/DesignListView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/designs/DesignListView.swift
+new file mode 100644
+index 0000000..19380ea
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/designs/DesignListView.swift
+@@ -0,0 +1,48 @@
++//
++//  DesignListView.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI on 2020-06-01.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++import Backend
++
++struct DesignListView: View {
++    @EnvironmentObject private var collection: UserCollection
++    @State private var showingForm = false
++    
++    var body: some View {
++        List {
++            Button(action: { showingForm = true }) {
++                Text("Add a new design").foregroundColor(.acHeaderBackground)
++            }
++            if collection.designs.isEmpty {
++                MessageView(collectionName: "designs")
++            } else {
++                ForEach(collection.designs) { design in
++                    DesignRowView(design: design)
++                }
++                .onDelete { indexes in
++                    if let index = indexes.first {
++                        collection.deleteDesign(at: index)
++                    }
++                }
++            }
++        }
++        .navigationBarTitle(Text("Custom Designs"), displayMode: .inline)
++        .sheet(isPresented: $showingForm) {
++            DesignFormView()
++        }
++    }
++}
++
++struct DesignListView_Previews: PreviewProvider {
++    static var previews: some View {
++        NavigationView {
++            DesignListView()
++        }
++        .environmentObject(UserCollection.shared)
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/designs/DesignRowView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/designs/DesignRowView.swift
+new file mode 100644
+index 0000000..fd0f302
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/designs/DesignRowView.swift
+@@ -0,0 +1,48 @@
++//
++//  DesignRowView.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI on 2020-06-01.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++import Backend
++
++struct DesignRowView: View {
++    let design: Design
++    
++    private var viewModel: DesignRowViewModel {
++        DesignRowViewModel(design: design)
++    }
++    
++    var body: some View {
++        VStack(alignment: .leading, spacing: 4) {
++            Text(design.title)
++                .font(.headline)
++                .foregroundColor(.acText)
++            HStack {
++                Text(viewModel.category)
++                    .font(.caption)
++                    .foregroundColor(.acHeaderBackground)
++                Text(viewModel.code)
++                    .font(.system(.caption, design: .monospaced))
++                    .foregroundColor(.acSecondaryText)
++            }
++            if !design.description.isEmpty {
++                Text(design.description)
++                    .font(.caption)
++                    .foregroundColor(.acSecondaryText)
++            }
++        }
++        .padding(.vertical, 4)
++    }
++}
++
++struct DesignRowView_Previews: PreviewProvider {
++    static var previews: some View {
++        List {
++            DesignRowView(design: Design(title: "Sample", code: "MA667931515180", description: "Test"))
++        }
++    }
++}
+diff --git a/ACHNBrowserUI/ACHNBrowserUI/views/shared/MessageView.swift b/ACHNBrowserUI/ACHNBrowserUI/views/shared/MessageView.swift
+new file mode 100644
+index 0000000..04463f2
+--- /dev/null
++++ b/ACHNBrowserUI/ACHNBrowserUI/views/shared/MessageView.swift
+@@ -0,0 +1,41 @@
++//
++//  MessageView.swift
++//  ACHNBrowserUI
++//
++//  Created by ACHNBrowserUI on 2020-06-01.
++//  Copyright © 2020 Thomas Ricouard. All rights reserved.
++//
++
++import SwiftUI
++
++struct MessageView: View {
++    let message: String
++    
++    /// Initialize with a plain string message.
++    init(string: String) {
++        self.message = string
++    }
++    
++    /// Initialize with a collection name (for empty collection states).
++    init(collectionName: String) {
++        self.message = "When you star some \(collectionName), they'll be displayed here."
++    }
++    
++    /// Initialize for no-results state.
++    init(noResultsFor: String) {
++        self.message = "No results for \"\(noResultsFor)\"."
++    }
++    
++    var body: some View {
++        Text(message)
++            .foregroundColor(.acSecondaryText)
++            .multilineTextAlignment(.center)
++            .padding()
++    }
++}
++
++struct MessageView_Previews: PreviewProvider {
++    static var previews: some View {
++        MessageView(string: "Hello World")
++    }
++}
