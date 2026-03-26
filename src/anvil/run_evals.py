@@ -6,8 +6,6 @@ from typing import Annotated
 
 import typer
 
-from .util import resolve_registry_env
-
 
 def run_evals(
     model: str | None = typer.Option(
@@ -48,12 +46,13 @@ def run_evals(
     output: str | None = typer.Option(
         None, "--output", help="Output directory override"
     ),
-    dockerhub_username: str = typer.Option(
-        "", "--dockerhub-username", "-u", help="DockerHub username (defaults to REGISTRY_USERNAME from .env)"
-    ),
-    dockerhub_repo: str = typer.Option(
-        "", "--dockerhub-repo", help="DockerHub repo name"
-    ),
+    no_ui_tests: Annotated[
+        bool,
+        typer.Option(
+            "--no-ui-tests",
+            help="Run XCTest unit tests only; skip UI tests from uitests.swift. Default: unit tests then UI tests when a task defines them.",
+        ),
+    ] = False,
     compile_only: Annotated[
         bool,
         typer.Option(
@@ -78,15 +77,11 @@ def run_evals(
     ] = None,
 ) -> None:
     """Run evaluation with an agent on a dataset."""
-    dockerhub_username, dockerhub_repo = resolve_registry_env(dockerhub_username, dockerhub_repo)
-
     from .evals import run_evaluation
 
     rc = run_evaluation(
         model=model,
         dataset_id=dataset,
-        dockerhub_username=dockerhub_username,
-        dockerhub_repo=dockerhub_repo,
         agent=agent,
         n_attempts=n_attempts,
         output=output,
@@ -96,5 +91,6 @@ def run_evals(
         compile_only=compile_only,
         rollout_only=rollout_only,
         task_filter=task,
+        run_ui_tests=not no_ui_tests,
     )
     raise typer.Exit(rc)

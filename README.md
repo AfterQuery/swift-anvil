@@ -81,6 +81,8 @@ anvil run-evals \
   --n-attempts 4
 ```
 
+By default each eval runs **unit tests** (`tests.swift`) and then **UI tests** (`uitests.swift`) when the task provides them. Pass **`--no-ui-tests`** to evaluate with unit tests only (skips copying and running UI tests).
+
 Use `--n-attempts` to control how many runs per task (useful for pass@k metrics). Results are saved to `<dataset>/runs/<agent>_<model>/`.
 
 > 💡 **Progress is saved automatically** to minimize costs. If you re-run the same command, completed tasks are skipped. Use `--no-continue` to start fresh.
@@ -93,12 +95,13 @@ Use `--n-attempts` to control how many runs per task (useful for pass@k metrics)
 | `--dataset`            | —                       | Dataset ID or path                                  |
 | `--agent`              | mini-swe-agent          | Agent to use (`mini-swe-agent` or `oracle`)         |
 | `--n-attempts`         | 1                       | Attempts per task (for pass@k)                      |
+| `--no-ui-tests`        | false                   | Unit tests only; skip `uitests.swift` UI tests      |
 | `--compile-only`       | false                   | Only check compilation, skip unit tests             |
 | `--no-continue`        | false                   | Start fresh, ignore previous results                |
 | `--max-parallel`       | 30                      | Concurrent agent runs                               |
 | `--max-wait`           | auto                    | Minutes to wait for Modal rate limits               |
-| `--dockerhub-username` | `REGISTRY_USERNAME` env | Docker Hub username (modal backend)                 |
-| `--dockerhub-repo`     | `anvil-images`          | Docker Hub repo name (modal backend)                |
+
+Docker Hub auth for Modal uses **`REGISTRY_USERNAME`** and **`REGISTRY_PASSWORD`** in `.env` (see Setup). Image names come from `instances.yaml` (set when you run `convert-dataset` / `publish-images`).
 
 ## Writing Tasks
 

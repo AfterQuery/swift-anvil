@@ -260,6 +260,7 @@ def eval_single_patch(
     attempt: int | None = None,
     compile_only: bool = False,
     source_tasks_dir: Path | None = None,
+    run_ui_tests: bool = True,
 ) -> dict | None:
     """Evaluate a single patch. Returns {"tests": [...]} or None on error."""
     tag = _result_key(instance_id, attempt)
@@ -321,7 +322,11 @@ def eval_single_patch(
         test_type = test_copier.copy_task_tests(instance_id, worktree_dir)
         has_task_tests = bool(test_type)
 
-        has_ui_tests = test_copier.copy_task_uitests(instance_id, worktree_dir)
+        has_ui_tests = (
+            test_copier.copy_task_uitests(instance_id, worktree_dir)
+            if run_ui_tests
+            else False
+        )
 
         all_stdout = ""
         all_stderr = ""
@@ -471,6 +476,7 @@ def run_xcode_evals(
     max_workers: int | None = None,
     compile_only: bool = False,
     dataset_id: str | None = None,
+    run_ui_tests: bool = True,
 ) -> dict[str, bool]:
     """Run Xcode evals for a batch of patches. Returns instance_id → pass/fail."""
     xcode_config = load_xcode_config(dataset_tasks_dir, dataset_id=dataset_id)
@@ -534,7 +540,8 @@ def run_xcode_evals(
     actual_workers = min(max_workers, len(real_patches))
     typer.echo(
         f"Running Xcode evals ({len(real_patches)} patches, {actual_workers} workers, "
-        f"compile_only={compile_only}, {n_with_tests} with unit tests)"
+        f"compile_only={compile_only}, run_ui_tests={run_ui_tests}, "
+        f"{n_with_tests} with unit tests)"
     )
 
     if not real_patches:
@@ -583,6 +590,7 @@ def run_xcode_evals(
                 attempt=patch_sample.get("attempt"),
                 compile_only=compile_only,
                 source_tasks_dir=src_tasks,
+                run_ui_tests=run_ui_tests,
             )
             eval_durations.append(time.time() - t0)
             return result

@@ -138,8 +138,6 @@ def _cleanup_bad_evals(base_out: Path, instances: list[dict], k: int) -> int:
 def run_evaluation(
     model: str | None,
     dataset_id: str,
-    dockerhub_username: str,
-    dockerhub_repo: str,
     agent: str = "mini-swe-agent",
     n_attempts: int = 1,
     output: str | None = None,
@@ -149,6 +147,7 @@ def run_evaluation(
     compile_only: bool = False,
     rollout_only: bool = False,
     task_filter: list[str] | None = None,
+    run_ui_tests: bool = True,
 ) -> int:
     """Run full evaluation with an agent on a dataset."""
     try:
@@ -218,6 +217,7 @@ def run_evaluation(
     typer.echo(f"  Model: {model}")
     typer.echo(f"  Tasks: {n_tasks}" + (f" (filtered: {[i['instance_id'] for i in instances]})" if task_filter else ""))
     typer.echo(f"  Attempts: {k}")
+    typer.echo(f"  UI tests: {'on' if run_ui_tests else 'off (unit tests only)'}")
     typer.echo(f"  Output: {base_out}")
 
     # ---- Oracle: skip rollout, use gold_patches.json directly ----
@@ -389,6 +389,7 @@ def run_evaluation(
             eval_id=eval_id,
             compile_only=compile_only,
             dataset_id=dataset_id,
+            run_ui_tests=run_ui_tests,
         )
         eval_elapsed = time.time() - eval_start
         typer.echo(f"Xcode evals complete in {_fmt_s(eval_elapsed)}")
