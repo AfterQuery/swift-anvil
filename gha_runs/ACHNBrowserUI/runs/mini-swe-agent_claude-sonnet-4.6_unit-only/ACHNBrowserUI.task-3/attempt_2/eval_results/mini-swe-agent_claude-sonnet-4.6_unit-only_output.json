@@ -1,9 +1,0 @@
-{
-  "tests": [
-    {
-      "name": "eval_infrastructure",
-      "status": "FAILED",
-      "message": "Error: [('/Users/runner/work/swift-anvil/swift-anvil/.xcode-cache/ACHNBrowserUI/3d11674846dd/DerivedData-app-tests/ModuleCache.noindex/1CUIQE1PDWFWN/CFNetwork-31O2G72MZJCHU.pcm', '/Users/runner/work/swift-anvil/swift-anvil/_anvil_tmp/anvil-eval-ACHNBrowserUI.task-3-2-9038913478583/DerivedData-app-tests/ModuleCache.noindex/1CUIQE1PDWFWN/CFNetwork-31O2G72MZJCHU.pcm', \"[Errno 28] No space left on device: '/Users/runner/work/swift-anvil/swift-anvil/.xcode-cache/ACHNBrowserUI/3d11674846dd/DerivedData"
-    }
-  ]
-}

@@ -373,8 +373,17 @@ async def run_agent_in_modal(
         except Exception:
             pass  # sandbox may already be dead
 
-        error_msg = str(e)
-        if "timeout" in error_msg.lower() or "Sandbox exceeded" in error_msg:
+        error_msg = str(e).strip()
+        # Modal often kills the sandbox at `timeout=` with a generic or empty
+        # exception message — infer timeout when duration matches configured cap.
+        if (not error_msg or duration >= agent_config.timeout * 0.98) and duration >= (
+            agent_config.timeout * 0.98
+        ):
+            error_msg = (
+                f"Sandbox timed out after {agent_config.timeout}s "
+                f"(Modal sandbox timeout; partial output may still be in stdout.log)"
+            )
+        elif "timeout" in error_msg.lower() or "Sandbox exceeded" in error_msg:
             error_msg = f"Sandbox timed out after {agent_config.timeout}s: {error_msg}"
 
         logger.warning(
