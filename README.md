@@ -98,7 +98,7 @@ Use `--n-attempts` to control how many runs per task (useful for pass@k metrics)
 | `--no-ui-tests`        | false                   | Unit tests only; skip `uitests.swift` UI tests      |
 | `--compile-only`       | false                   | Only check compilation, skip unit tests             |
 | `--no-continue`        | false                   | Start fresh, ignore previous results                |
-| `--max-parallel`       | 30                      | Concurrent agent runs                               |
+| `--max-parallel`       | 20                      | Concurrent agent runs                               |
 | `--max-wait`           | auto                    | Minutes to wait for Modal rate limits               |
 
 Docker Hub auth for Modal uses **`REGISTRY_USERNAME`** and **`REGISTRY_PASSWORD`** in `.env` (see Setup). Image names come from `instances.yaml` (set when you run `convert-dataset` / `publish-images`).

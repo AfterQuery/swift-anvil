@@ -145,7 +145,7 @@ def run_evaluation(
     n_attempts: int = 1,
     output: str | None = None,
     max_wait_minutes: int | None = None,
-    max_parallel: int = 30,
+    max_parallel: int = 20,
     no_continue: bool = False,
     compile_only: bool = False,
     rollout_only: bool = False,

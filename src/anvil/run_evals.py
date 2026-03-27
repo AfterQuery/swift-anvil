@@ -33,9 +33,9 @@ def run_evals(
         int,
         typer.Option(
             "--max-parallel",
-            help="Max concurrent runs",
+            help="Max concurrent agent runs (Modal sandboxes)",
         ),
-    ] = 30,
+    ] = 20,
     no_continue: Annotated[
         bool,
         typer.Option(

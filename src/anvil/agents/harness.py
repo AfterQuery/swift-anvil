@@ -60,7 +60,7 @@ AGENT_CONFIGS: dict[str, AgentConfig] = {
         install_cmd="pip install -q mini-swe-agent || pip install -q --break-system-packages mini-swe-agent",
         run_cmd="mini -c mini.yaml -c /tmp/anvil_override.yaml --model {model} --task {task} --yolo --exit-immediately --output {output_dir}/trajectory.traj.json --cost-limit 0",
         output_format="trajectory_json",
-        timeout=2400,
+        timeout=3600,
     ),
 }
 
@@ -376,15 +376,14 @@ async def run_agent_in_modal(
         error_msg = str(e).strip()
         # Modal often kills the sandbox at `timeout=` with a generic or empty
         # exception message — infer timeout when duration matches configured cap.
-        if (not error_msg or duration >= agent_config.timeout * 0.98) and duration >= (
-            agent_config.timeout * 0.98
-        ):
+        to = agent_config.timeout
+        if (not error_msg or duration >= to * 0.98) and duration >= to * 0.98:
             error_msg = (
-                f"Sandbox timed out after {agent_config.timeout}s "
+                f"Sandbox timed out after {to}s "
                 f"(Modal sandbox timeout; partial output may still be in stdout.log)"
             )
         elif "timeout" in error_msg.lower() or "Sandbox exceeded" in error_msg:
-            error_msg = f"Sandbox timed out after {agent_config.timeout}s: {error_msg}"
+            error_msg = f"Sandbox timed out after {to}s: {error_msg}"
 
         logger.warning(
             "Agent %s failed on %s after %.1fs: %s | partial_stdout=%d bytes, partial_stderr=%d bytes",
