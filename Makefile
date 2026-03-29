@@ -4,7 +4,8 @@ setup:
 	uv venv
 	uv sync
 	xcode-select --install || true
-	xcodebuild -downloadPlatform iOS
+	@xcrun simctl list runtimes 2>/dev/null | grep -q com.apple.CoreSimulator.SimRuntime.iOS \
+		|| xcodebuild -downloadPlatform iOS
 	cp -n .env.example .env || true
 
 test:

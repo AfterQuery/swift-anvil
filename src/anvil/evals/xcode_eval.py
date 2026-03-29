@@ -568,10 +568,10 @@ def run_xcode_evals(
     try:
         if needs_sim_pool:
             typer.echo(
-                f"Creating {max_workers} simulators for parallel test execution..."
+                f"Creating {actual_workers} simulators for parallel test execution..."
             )
             sim_pool = SimulatorPool(test_destination)
-            sim_pool.create(max_workers)
+            sim_pool.create(actual_workers)
 
         def _assign_sim_and_run(patch_sample: dict) -> dict:
             if sim_pool and sim_pool.udids:
