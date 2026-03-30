@@ -2,7 +2,7 @@ import XCTest
 @testable import AC_Helper
 import Backend
 
-final class AnvilTask9F2PTests: XCTestCase {
+final class AnvilTask9Tests: XCTestCase {
 
     var collection: UserCollection!
 

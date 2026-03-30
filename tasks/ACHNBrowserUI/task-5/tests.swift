@@ -3,7 +3,7 @@ import SwiftUI
 @testable import AC_Helper
 import Backend
 
-final class AnvilTask5F2PTests: XCTestCase {
+final class AnvilTask5Tests: XCTestCase {
 
     // MARK: - Chore Model
 

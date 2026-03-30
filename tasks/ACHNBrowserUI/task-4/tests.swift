@@ -3,7 +3,7 @@ import SwiftUI
 @testable import AC_Helper
 import Backend
 
-final class AnvilTask4F2PTests: XCTestCase {
+final class AnvilTask4Tests: XCTestCase {
 
     // MARK: - Helpers
 

@@ -3,7 +3,7 @@ import SwiftUI
 @testable import AC_Helper
 import Backend
 
-final class AnvilTask10F2PTests: XCTestCase {
+final class AnvilTask10Tests: XCTestCase {
 
     // MARK: - Design model
 

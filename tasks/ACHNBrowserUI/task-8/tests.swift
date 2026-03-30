@@ -2,7 +2,7 @@ import XCTest
 import SwiftUI
 @testable import AC_Helper
 
-final class AnvilTask8F2PTests: XCTestCase {
+final class AnvilTask8Tests: XCTestCase {
 
     // MARK: - TurnipsAveragePriceRow accepts both prices and minMax
 

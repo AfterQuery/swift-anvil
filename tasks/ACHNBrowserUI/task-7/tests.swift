@@ -6,7 +6,7 @@ import Combine
 // the original product module name so the build succeeds on the base commit.
 @testable import ACHNBrowserUI
 
-final class AnvilTask7F2PTests: XCTestCase {
+final class AnvilTask7Tests: XCTestCase {
 
     // MARK: - TurnipsViewModel
 

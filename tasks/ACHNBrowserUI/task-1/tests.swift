@@ -3,7 +3,7 @@ import SwiftUI
 @testable import AC_Helper
 import Backend
 
-final class AnvilTask1F2PTests: XCTestCase {
+final class AnvilTask1Tests: XCTestCase {
 
     // MARK: - Helper: build an Item with specific active-month/time data
 

@@ -2,7 +2,7 @@ import XCTest
 import SwiftUI
 @testable import AC_Helper
 
-final class AnvilTask2F2PTests: XCTestCase {
+final class AnvilTask2Tests: XCTestCase {
 
     // MARK: - GridStack struct basics
 

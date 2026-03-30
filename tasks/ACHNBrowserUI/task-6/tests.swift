@@ -3,7 +3,7 @@ import SwiftUI
 import Combine
 @testable import AC_Helper
 
-final class AnvilTask6F2PTests: XCTestCase {
+final class AnvilTask6Tests: XCTestCase {
 
     // MARK: - DashboardViewModel existence and ObservableObject
 
