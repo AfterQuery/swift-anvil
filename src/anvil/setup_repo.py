@@ -183,10 +183,31 @@ final class AnvilTask1Tests: XCTestCase {{
 }}
 """)
 
+    (task1_path / "uitests.swift").write_text("""\
+import XCTest
+
+final class AnvilTask1UITests: XCTestCase {
+
+    var app: XCUIApplication!
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        app.launch()
+    }
+
+    func testPlaceholder() throws {
+        // TODO: implement UI tests
+        XCTFail("Not implemented")
+    }
+
+}
+""")
+
     typer.echo(f"\n✓ Repository cloned to: {repos_path}")
     typer.echo(f"✓ Task structure created at: {task_path}")
     typer.echo("\nNext steps:")
     typer.echo(f"  1. Edit {task_path}/repo.md to add task details")
     typer.echo(f"  2. Edit {task_path}/metadata.yaml to add base commits")
     typer.echo(f"  3. Edit {task_path}/xcode_config.yaml with Xcode configuration")
-    typer.echo(f"  4. Fill in {task1_path}/problem.md and {task1_path}/tests.swift")
+    typer.echo(f"  4. Fill in {task1_path}/problem.md, tests.swift, and uitests.swift")
