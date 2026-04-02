@@ -8,6 +8,7 @@ import typer
 from . import __version__
 from .publish import publish_images
 from .run_evals import run_evals
+from .setup_repo import setup_repo
 from .warm_cache import warm_xcode_cache
 from .wizard.converters import convert_dataset
 
@@ -23,6 +24,7 @@ except ImportError:
 app = typer.Typer(help="AQ Project Anvil - SWE-Bench Pro Tasks", no_args_is_help=True)
 app.command("publish-images", no_args_is_help=True)(publish_images)
 app.command("run-evals", no_args_is_help=True)(run_evals)
+app.command("setup-repo", no_args_is_help=True)(setup_repo)
 app.command("convert-dataset", no_args_is_help=True)(convert_dataset)
 app.command("warm-xcode-cache", no_args_is_help=True)(warm_xcode_cache)
 

@@ -74,15 +74,8 @@ Animal Crossing Helper: https://github.com/Dimillian/ACHNBrowserUI
 
 ## Commands
 
-
 ```bash
 source .venv/bin/activate
-```
-
-0. Clone source repo
-
-```bash
-git clone https://github.com/Dimillian/ACHNBrowserUI repos/ACHNBrowserUI
 ```
 
 1. Write tasks and convert dataset

@@ -43,11 +43,13 @@ Go to [hub.docker.com](https://hub.docker.com) and create a new **private** repo
 
 ## Local Usage
 
-1. Clone the repo you want to evaluate into `repos/`
+1. Set up a new repo (clone + scaffold task structure)
 
 ```bash
-git clone https://github.com/<org>/<repo_name> repos/<repo_name>
+anvil setup-repo <github_url>
 ```
+
+This clones the repo into `repos/` and creates `tasks/<repo_name>/` with template `repo.md`, `metadata.yaml`, and `xcode_config.yaml`. Fill those in before proceeding.
 
 2. Convert the dataset (also warms the Xcode build cache)
 
@@ -89,17 +91,17 @@ Use `--n-attempts` to control how many runs per task (useful for pass@k metrics)
 
 ### Options
 
-| Flag                   | Default                 | Description                                         |
-| ---------------------- | ----------------------- | --------------------------------------------------- |
-| `--model`              | —                       | Model ID (required for agents, optional for oracle) |
-| `--dataset`            | —                       | Dataset ID or path                                  |
-| `--agent`              | mini-swe-agent          | Agent to use (`mini-swe-agent` or `oracle`)         |
-| `--n-attempts`         | 1                       | Attempts per task (for pass@k)                      |
-| `--no-ui-tests`        | false                   | Unit tests only; skip `uitests.swift` UI tests      |
-| `--compile-only`       | false                   | Only check compilation, skip unit tests             |
-| `--no-continue`        | false                   | Start fresh, ignore previous results                |
-| `--max-parallel`       | 20                      | Concurrent agent runs                               |
-| `--max-wait`           | auto                    | Minutes to wait for Modal rate limits               |
+| Flag             | Default        | Description                                         |
+| ---------------- | -------------- | --------------------------------------------------- |
+| `--model`        | —              | Model ID (required for agents, optional for oracle) |
+| `--dataset`      | —              | Dataset ID or path                                  |
+| `--agent`        | mini-swe-agent | Agent to use (`mini-swe-agent` or `oracle`)         |
+| `--n-attempts`   | 1              | Attempts per task (for pass@k)                      |
+| `--no-ui-tests`  | false          | Unit tests only; skip `uitests.swift` UI tests      |
+| `--compile-only` | false          | Only check compilation, skip unit tests             |
+| `--no-continue`  | false          | Start fresh, ignore previous results                |
+| `--max-parallel` | 20             | Concurrent agent runs                               |
+| `--max-wait`     | auto           | Minutes to wait for Modal rate limits               |
 
 Docker Hub auth for Modal uses **`REGISTRY_USERNAME`** and **`REGISTRY_PASSWORD`** in `.env` (see Setup). Image names come from `instances.yaml` (set when you run `convert-dataset` / `publish-images`).
 
