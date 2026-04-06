@@ -15,7 +15,19 @@ from ruamel.yaml import YAML as _YAML
 
 from ..config import repo_root, source_tasks_dir
 
-from .constants import DEFAULT_BUILD_TIMEOUT, PROJECT_PBXPROJ, XCODE_CONFIG_PROJECT
+from .constants import (
+    DEFAULT_BUILD_TIMEOUT,
+    PROJECT_PBXPROJ,
+    XCODE_CONFIG_APP_TEST_FILES_DEST,
+    XCODE_CONFIG_APP_TEST_SCHEME,
+    XCODE_CONFIG_APP_TEST_TARGET,
+    XCODE_CONFIG_PROJECT,
+    XCODE_CONFIG_SCHEME,
+    XCODE_CONFIG_TEST_FILES_DEST,
+    XCODE_CONFIG_TEST_SCHEME,
+    XCODE_CONFIG_UI_TEST_FILES_DEST,
+    XCODE_CONFIG_UI_TEST_TARGET,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +150,7 @@ def get_app_test_destination(xcode_config: dict) -> str:
 
 def get_app_bundle_name(xcode_config: dict) -> str:
     """Resolve app bundle name from config (app_bundle_name or scheme)."""
-    return xcode_config.get("app_bundle_name") or xcode_config.get("scheme", "")
+    return xcode_config.get("app_bundle_name") or xcode_config.get(XCODE_CONFIG_SCHEME, "")
 
 
 def resolve_test_package_path(xcode_config: dict, work_dir: Path) -> str:
@@ -291,8 +303,8 @@ class XcodeBuildCache:
             if result.returncode != 0:
                 summary = _format_build_errors(result.stderr)
                 shutil.rmtree(dd_dir, ignore_errors=True)
-                has_test_schemes = xcode_config.get("test_scheme") or xcode_config.get(
-                    "app_test_scheme"
+                has_test_schemes = xcode_config.get(XCODE_CONFIG_TEST_SCHEME) or xcode_config.get(
+                    XCODE_CONFIG_APP_TEST_SCHEME
                 )
                 if has_test_schemes:
                     # Main build failed but test DDs can still be warmed independently.
@@ -368,12 +380,12 @@ class XcodeBuildCache:
         self, xcode_config: dict, repo_name: str, base_commit: str
     ) -> bool:
         """Check if any test DerivedData directories need warming."""
-        if xcode_config.get("test_scheme"):
+        if xcode_config.get(XCODE_CONFIG_TEST_SCHEME):
             if not _dd_is_populated(
                 self._test_derived_data_dir(repo_name, base_commit)
             ):
                 return True
-        if xcode_config.get("app_test_scheme"):
+        if xcode_config.get(XCODE_CONFIG_APP_TEST_SCHEME):
             if not _dd_is_populated(
                 self._app_test_derived_data_dir(repo_name, base_commit)
             ):
@@ -399,7 +411,7 @@ class XcodeBuildCache:
         base_commit: str,
     ) -> None:
         """Pre-build the SPM test scheme so eval runs skip dependency resolution."""
-        test_scheme = xcode_config.get("test_scheme", "")
+        test_scheme = xcode_config.get(XCODE_CONFIG_TEST_SCHEME, "")
         if not test_scheme:
             return
 
@@ -411,7 +423,7 @@ class XcodeBuildCache:
         if not resolved_pkg:
             return
 
-        test_files_dest = xcode_config.get("test_files_dest", "")
+        test_files_dest = xcode_config.get(XCODE_CONFIG_TEST_FILES_DEST, "")
         if not test_files_dest:
             return
 
@@ -431,7 +443,12 @@ class XcodeBuildCache:
 
         build_timeout = _build_timeout(xcode_config)
         typer.echo(f"  Warming test DerivedData for {repo_name}@{base_commit[:8]}...")
-        result = _run_xcodebuild(test_cmd, str(test_cwd), build_timeout)
+        try:
+            result = _run_xcodebuild(test_cmd, str(test_cwd), build_timeout)
+        except subprocess.TimeoutExpired:
+            dummy_file.unlink(missing_ok=True)
+            shutil.rmtree(test_dd_dir, ignore_errors=True)
+            return
         dummy_file.unlink(missing_ok=True)
 
         if result.returncode != 0:
@@ -449,7 +466,7 @@ class XcodeBuildCache:
         base_commit: str,
     ) -> None:
         """Pre-build the app-level test scheme (``DerivedData-app-tests``)."""
-        app_test_scheme = xcode_config.get("app_test_scheme", "")
+        app_test_scheme = xcode_config.get(XCODE_CONFIG_APP_TEST_SCHEME, "")
         if not app_test_scheme:
             return
 
@@ -457,8 +474,8 @@ class XcodeBuildCache:
         if _dd_is_populated(app_test_dd):
             return
 
-        app_test_target = xcode_config.get("app_test_target", "")
-        app_test_files_dest = xcode_config.get("app_test_files_dest", "")
+        app_test_target = xcode_config.get(XCODE_CONFIG_APP_TEST_TARGET, "")
+        app_test_files_dest = xcode_config.get(XCODE_CONFIG_APP_TEST_FILES_DEST, "")
         if not app_test_target or not app_test_files_dest:
             return
 
@@ -490,7 +507,12 @@ class XcodeBuildCache:
         typer.echo(
             f"  Warming app-test DerivedData for {repo_name}@{base_commit[:8]}..."
         )
-        result = _run_xcodebuild(cmd, str(cwd), build_timeout)
+        try:
+            result = _run_xcodebuild(cmd, str(cwd), build_timeout)
+        except subprocess.TimeoutExpired:
+            dummy_file.unlink(missing_ok=True)
+            shutil.rmtree(app_test_dd, ignore_errors=True)
+            return
         dummy_file.unlink(missing_ok=True)
 
         if result.returncode != 0:
@@ -683,7 +705,7 @@ def _build_xcodebuild_test_cmd(
         allow_pkg_resolution: If True, omit ``-disableAutomaticPackageResolution``
             (used during cache warming).
     """
-    test_scheme = xcode_config.get("test_scheme", "")
+    test_scheme = xcode_config.get(XCODE_CONFIG_TEST_SCHEME, "")
     if not test_scheme:
         return None
 
@@ -786,7 +808,7 @@ def _inject_test_target(
     # Discover the host app target UUID and project object UUID from pbxproj
     m = re.search(
         r"(\w{24}) /\* "
-        + re.escape(xcode_config.get("scheme", ""))
+        + re.escape(xcode_config.get(XCODE_CONFIG_SCHEME, ""))
         + r" \*/ = \{\s*isa = PBXNativeTarget;",
         pbx,
     )
@@ -810,7 +832,7 @@ def _inject_test_target(
 
     # Discover the app's PRODUCT_NAME for TEST_HOST (unit tests only)
     m = re.search(r"productReference = \w{24} /\* (.+?)\.app \*/", pbx)
-    app_product_name = m.group(1) if m else xcode_config.get("scheme", "")
+    app_product_name = m.group(1) if m else xcode_config.get(XCODE_CONFIG_SCHEME, "")
 
     # 1. PBXBuildFile
     pbx = pbx.replace(
@@ -1183,7 +1205,7 @@ def _inject_test_target(
         else:
             # Unit tests link against the app binary so @testable import works.
             module_name = xcode_config.get(
-                "app_test_module", xcode_config.get("scheme", "")
+                "app_test_module", xcode_config.get(XCODE_CONFIG_SCHEME, "")
             )
             host_m = re.search(
                 rf"productName\s*=\s*{re.escape(scheme_name)};.*?"
@@ -1217,11 +1239,11 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
     return _inject_test_target(
         xcode_config,
         work_dir,
-        test_target=xcode_config.get("app_test_target", ""),
-        files_dest=xcode_config.get("app_test_files_dest", ""),
+        test_target=xcode_config.get(XCODE_CONFIG_APP_TEST_TARGET, ""),
+        files_dest=xcode_config.get(XCODE_CONFIG_APP_TEST_FILES_DEST, ""),
         project_rel=xcode_config.get(XCODE_CONFIG_PROJECT, ""),
         bundle_id=xcode_config.get("app_test_bundle_id", "com.anvil.tests"),
-        scheme_name=xcode_config.get("app_test_scheme", xcode_config.get("scheme", "")),
+        scheme_name=xcode_config.get(XCODE_CONFIG_APP_TEST_SCHEME, xcode_config.get(XCODE_CONFIG_SCHEME, "")),
         product_type="com.apple.product-type.bundle.unit-test",
         is_ui_test=False,
     )
@@ -1238,11 +1260,11 @@ def inject_ui_test_target(xcode_config: dict, work_dir: Path) -> bool:
     return _inject_test_target(
         xcode_config,
         work_dir,
-        test_target=xcode_config.get("ui_test_target", ""),
-        files_dest=xcode_config.get("ui_test_files_dest", ""),
+        test_target=xcode_config.get(XCODE_CONFIG_UI_TEST_TARGET, ""),
+        files_dest=xcode_config.get(XCODE_CONFIG_UI_TEST_FILES_DEST, ""),
         project_rel=xcode_config.get(XCODE_CONFIG_PROJECT, ""),
         bundle_id=xcode_config.get("ui_test_bundle_id", "com.anvil.uitests"),
-        scheme_name=xcode_config.get("ui_test_scheme", xcode_config.get("scheme", "")),
+        scheme_name=xcode_config.get("ui_test_scheme", xcode_config.get(XCODE_CONFIG_SCHEME, "")),
         product_type="com.apple.product-type.bundle.ui-testing",
         is_ui_test=True,
     )
@@ -1263,7 +1285,7 @@ def _build_xcodebuild_app_test_cmd(
     hosted inside the app bundle.  Uses ad-hoc signing (``CODE_SIGN_IDENTITY=-``)
     so that entitlements (e.g. CloudKit container) are preserved on simulator.
     """
-    app_test_scheme = xcode_config.get("app_test_scheme", "")
+    app_test_scheme = xcode_config.get(XCODE_CONFIG_APP_TEST_SCHEME, "")
     if not app_test_scheme:
         return None
 
@@ -1287,7 +1309,7 @@ def _build_xcodebuild_app_test_cmd(
     if not allow_pkg_resolution:
         cmd.append("-disableAutomaticPackageResolution")
 
-    app_test_target = xcode_config.get("app_test_target", "")
+    app_test_target = xcode_config.get(XCODE_CONFIG_APP_TEST_TARGET, "")
     if app_test_target:
         cmd.extend(["-only-testing", app_test_target])
 
