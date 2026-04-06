@@ -18,6 +18,7 @@ from ..config import source_tasks_dir
 from .xcode_cache import (
     XcodeBuildCache,
     _as_build_for_testing,
+    _build_timeout,
     _build_xcodebuild_app_test_cmd,
     _build_xcodebuild_cmd,
     _build_xcodebuild_test_cmd,
@@ -41,7 +42,6 @@ from .build_gate import (
 )
 from .constants import (
     DEFAULT_MAX_WORKERS,
-    DEFAULT_XCODEBUILD_TIMEOUT,
     TESTS_FILENAME,
     XCODE_CONFIG_APP_TEST_TARGET,
     XCODE_CONFIG_PROJECT,
@@ -115,16 +115,27 @@ def _finalize_test_output(
     extra_stderr: str = "",
 ) -> dict:
     """Parse xcodebuild output, apply fallback failure if returncode is non-zero and no tests
-    were recorded, then attach _stdout/_stderr (prefixed with any extra build output)."""
+    were recorded, then attach _stdout/_stderr (prefixed with any extra build output).
+    """
     output = parse_xcodebuild_output(xcode_result.stdout, xcode_result.stderr)
     if xcode_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
         output = failed_test_result(TEST_NAME_XCTEST_RUN, failure_msg)
-    output["_stdout"] = (extra_stdout + "\n" + xcode_result.stdout) if extra_stdout else xcode_result.stdout
-    output["_stderr"] = (extra_stderr + "\n" + xcode_result.stderr) if extra_stderr else xcode_result.stderr
+    output["_stdout"] = (
+        (extra_stdout + "\n" + xcode_result.stdout)
+        if extra_stdout
+        else xcode_result.stdout
+    )
+    output["_stderr"] = (
+        (extra_stderr + "\n" + xcode_result.stderr)
+        if extra_stderr
+        else xcode_result.stderr
+    )
     return output
 
 
-def _pop_stdout_stderr(result: dict, accumulated_stdout: str, accumulated_stderr: str) -> tuple[str, str]:
+def _pop_stdout_stderr(
+    result: dict, accumulated_stdout: str, accumulated_stderr: str
+) -> tuple[str, str]:
     """Pop _stdout/_stderr from result dict and append to accumulated strings."""
     return (
         accumulated_stdout + "\n" + result.pop("_stdout", ""),
@@ -158,7 +169,7 @@ def _run_spm_tests(
         test_dd = dd_dir
     return _run_xcodebuild_tests(
         _build_xcodebuild_test_cmd(xcode_config, worktree_dir, test_dd),
-        timeout=DEFAULT_XCODEBUILD_TIMEOUT,
+        timeout=_build_timeout(xcode_config),
     )
 
 
@@ -195,7 +206,7 @@ def _run_app_tests(
 
     build_cmd = _as_build_for_testing(test_cmd)
     build_result = _run_xcodebuild(
-        build_cmd, str(test_cwd), DEFAULT_XCODEBUILD_TIMEOUT
+        build_cmd, str(test_cwd), _build_timeout(xcode_config)
     )
 
     if build_result.returncode != 0:
@@ -239,7 +250,7 @@ def _run_app_tests(
                     app_test_dd,
                 )
 
-    test_result = _run_xcodebuild(run_cmd, str(test_cwd), DEFAULT_XCODEBUILD_TIMEOUT)
+    test_result = _run_xcodebuild(run_cmd, str(test_cwd), _build_timeout(xcode_config))
 
     return _finalize_test_output(
         test_result,
@@ -267,13 +278,16 @@ def eval_single_patch(
     worktree_dir = None
 
     try:
-        _tmp_base = Path(os.environ.get("ANVIL_TMPDIR", tempfile.gettempdir()))
-        _tmp_base.mkdir(parents=True, exist_ok=True)
-        worktree_dir = _tmp_base / (
-            f"anvil-eval-{instance_id}-{attempt or 0}-{time.monotonic_ns()}"
-        )
+        worktree_dir = cache.warm_worktree_path(repo_name, base_commit)
+        warm_app_test_dd = cache.warm_app_test_dd_path(repo_name, base_commit)
 
-        cache.checkout(repo_name, base_commit, worktree_dir, xcode_config=xcode_config)
+        cache.checkout(
+            repo_name,
+            base_commit,
+            worktree_dir,
+            xcode_config=xcode_config,
+            copy_derived_data=False,
+        )
 
         if patch and patch.strip():
             apply_result = subprocess.run(
@@ -305,7 +319,9 @@ def eval_single_patch(
                 logger.warning(
                     "pbxproj validation failed for %s: %s", tag, pbxproj_error
                 )
-                result = failed_test_result(TEST_NAME_PBXPROJ_VALIDATION, pbxproj_error[:500])
+                result = failed_test_result(
+                    TEST_NAME_PBXPROJ_VALIDATION, pbxproj_error[:500]
+                )
                 save_eval_output(
                     output_dir,
                     instance_id,
@@ -349,7 +365,7 @@ def eval_single_patch(
             )
 
             build_result = _run_xcodebuild(
-                build_cmd, str(worktree_dir), DEFAULT_XCODEBUILD_TIMEOUT
+                build_cmd, str(worktree_dir), _build_timeout(xcode_config)
             )
 
             build_output = parse_build_result(
@@ -373,7 +389,11 @@ def eval_single_patch(
 
         run_tests = has_task_tests or not compile_only
 
-        base_config = _as_ui_test_config(xcode_config) if test_type == TEST_TYPE_UI else xcode_config
+        base_config = (
+            _as_ui_test_config(xcode_config)
+            if test_type == TEST_TYPE_UI
+            else xcode_config
+        )
         sim_udid = getattr(_tls, "sim_udid", None)
         test_xcode_config = (
             {
@@ -388,7 +408,9 @@ def eval_single_patch(
         xctest_output = None
         if run_tests:
             if test_type in (TEST_TYPE_APP, TEST_TYPE_UI):
-                xctest_output = _run_app_tests(test_xcode_config, worktree_dir)
+                xctest_output = _run_app_tests(
+                    test_xcode_config, worktree_dir, derived_data_dir=warm_app_test_dd
+                )
             else:
                 xctest_output = _run_spm_tests(
                     test_xcode_config,
@@ -398,7 +420,9 @@ def eval_single_patch(
                 )
 
             if xctest_output:
-                all_stdout, all_stderr = _pop_stdout_stderr(xctest_output, all_stdout, all_stderr)
+                all_stdout, all_stderr = _pop_stdout_stderr(
+                    xctest_output, all_stdout, all_stderr
+                )
 
             if xctest_output is None and has_task_tests:
                 xctest_output = failed_test_result(
@@ -409,17 +433,31 @@ def eval_single_patch(
             if has_ui_tests:
                 ui_config = _as_ui_test_config(test_xcode_config)
                 if sim_udid:
-                    ui_config = {**ui_config, "app_test_destination": f"platform=iOS Simulator,id={sim_udid}"}
-                ui_output = _run_app_tests(ui_config, worktree_dir, is_ui_test=True)
+                    ui_config = {
+                        **ui_config,
+                        "app_test_destination": f"platform=iOS Simulator,id={sim_udid}",
+                    }
+                ui_output = _run_app_tests(
+                    ui_config,
+                    worktree_dir,
+                    derived_data_dir=warm_app_test_dd,
+                    is_ui_test=True,
+                )
                 if ui_output:
-                    all_stdout, all_stderr = _pop_stdout_stderr(ui_output, all_stdout, all_stderr)
+                    all_stdout, all_stderr = _pop_stdout_stderr(
+                        ui_output, all_stdout, all_stderr
+                    )
                     xctest_output = (
                         merge_test_results(xctest_output, ui_output)
                         if xctest_output
                         else ui_output
                     )
 
-        combined = merge_test_results(build_output, xctest_output) if xctest_output else build_output
+        combined = (
+            merge_test_results(build_output, xctest_output)
+            if xctest_output
+            else build_output
+        )
 
         save_eval_output(
             output_dir,
@@ -436,9 +474,20 @@ def eval_single_patch(
     except subprocess.TimeoutExpired as te:
         timeout_s = te.timeout if te.timeout else "?"
         logger.error("Build/test timed out for %s after %ss", tag, timeout_s)
-        result = failed_test_result(TEST_NAME_COMPILATION, f"Build timed out ({timeout_s}s)")
+        result = failed_test_result(
+            TEST_NAME_COMPILATION, f"Build timed out ({timeout_s}s)"
+        )
+        partial_stdout = te.output or ""
+        partial_stderr = te.stderr or ""
         save_eval_output(
-            output_dir, instance_id, attempt, eval_id, result, patch, "", ""
+            output_dir,
+            instance_id,
+            attempt,
+            eval_id,
+            result,
+            patch,
+            partial_stdout,
+            partial_stderr,
         )
         return result
     except Exception as e:
@@ -643,7 +692,9 @@ def run_xcode_evals(
                     if passed_this:
                         passed_count += 1
                     if sib_attempt is not None:
-                        _write_eval_result_json(output_dir, iid, sib_attempt, passed_this)
+                        _write_eval_result_json(
+                            output_dir, iid, sib_attempt, passed_this
+                        )
 
                 if attempt is not None:
                     _write_eval_result_json(

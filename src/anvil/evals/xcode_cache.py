@@ -98,6 +98,28 @@ def _build_timeout(xcode_config: dict) -> int:
         return DEFAULT_BUILD_TIMEOUT
 
 
+def _run_pre_build_commands(xcode_config: dict, work_dir: Path) -> None:
+    """Run any pre_build_commands listed in xcode_config before building."""
+    cmds = xcode_config.get("pre_build_commands", [])
+    if not cmds:
+        return
+    for cmd in cmds:
+        logger.info("Running pre-build command: %s", cmd)
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=str(work_dir),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            logger.warning(
+                "Pre-build command failed (continuing): %s\nstderr: %s",
+                cmd,
+                result.stderr[-500:],
+            )
+
+
 def get_test_destination(xcode_config: dict) -> str:
     """Resolve test_destination from config (test_destination or destination)."""
     return xcode_config.get(
@@ -161,6 +183,14 @@ class XcodeBuildCache:
 
     def _app_test_derived_data_dir(self, repo_name: str, base_commit: str) -> Path:
         return self.commit_cache_dir(repo_name, base_commit) / _APP_TEST_DD_DIR
+
+    def warm_worktree_path(self, repo_name: str, base_commit: str) -> Path:
+        """Return the canonical worktree path used during cache warming."""
+        return self.commit_cache_dir(repo_name, base_commit) / "worktree"
+
+    def warm_app_test_dd_path(self, repo_name: str, base_commit: str) -> Path:
+        """Return the app-test DerivedData path built during cache warming."""
+        return self._app_test_derived_data_dir(repo_name, base_commit)
 
     def _main_build_failed_sentinel(self, repo_name: str, base_commit: str) -> Path:
         return self.commit_cache_dir(repo_name, base_commit) / ".main_build_failed"
@@ -235,6 +265,8 @@ class XcodeBuildCache:
             ]
         )
 
+        _run_pre_build_commands(xcode_config, work_dir)
+
         sentinel = self._main_build_failed_sentinel(repo_name, base_commit)
         if not build_cached and not sentinel.exists():
             typer.echo(f"  Building {repo_name} (full clean build)...")
@@ -248,7 +280,13 @@ class XcodeBuildCache:
                 allow_pkg_resolution=True,
             )
             build_timeout = _build_timeout(xcode_config)
-            result = _run_xcodebuild(build_cmd, str(work_dir), build_timeout)
+            try:
+                result = _run_xcodebuild(build_cmd, str(work_dir), build_timeout)
+            except subprocess.TimeoutExpired:
+                # Clean up the partial DerivedData so is_warm() won't falsely
+                # report this commit as cached on subsequent warm runs.
+                shutil.rmtree(dd_dir, ignore_errors=True)
+                raise
 
             if result.returncode != 0:
                 summary = _format_build_errors(result.stderr)
@@ -468,10 +506,16 @@ class XcodeBuildCache:
         base_commit: str,
         target_dir: Path,
         xcode_config: dict | None = None,
+        copy_derived_data: bool = True,
     ) -> Path:
         """Create an isolated worktree with pre-built DerivedData.
 
         Returns target_dir (the worktree root).
+
+        When copy_derived_data=False the DerivedData directories are not copied
+        into target_dir — useful when running the eval from the same path used
+        during warming so that Xcode can reuse compiled products via exact path
+        matching.
         """
         clone_dir = self.repo_clone_dir(repo_name)
         if not clone_dir.exists():
@@ -495,19 +539,21 @@ class XcodeBuildCache:
             ]
         )
 
-        # Clone each DerivedData dir and strip ModuleCache so Xcode rebuilds it
-        # cheaply while still reusing compiled products.
-        for dd_name, cache_dd in [
-            (_DD_DIR, self._derived_data_dir(repo_name, base_commit)),
-            (_TEST_DD_DIR, self._test_derived_data_dir(repo_name, base_commit)),
-            (_APP_TEST_DD_DIR, self._app_test_derived_data_dir(repo_name, base_commit)),
-        ]:
-            _clone_dd_if_populated(cache_dd, target_dir / dd_name)
-            module_cache = target_dir / dd_name / "ModuleCache.noindex"
-            if module_cache.exists():
-                shutil.rmtree(module_cache, ignore_errors=True)
+        if copy_derived_data:
+            # Clone each DerivedData dir and strip ModuleCache so Xcode rebuilds it
+            # cheaply while still reusing compiled products.
+            for dd_name, cache_dd in [
+                (_DD_DIR, self._derived_data_dir(repo_name, base_commit)),
+                (_TEST_DD_DIR, self._test_derived_data_dir(repo_name, base_commit)),
+                (_APP_TEST_DD_DIR, self._app_test_derived_data_dir(repo_name, base_commit)),
+            ]:
+                _clone_dd_if_populated(cache_dd, target_dir / dd_name)
+                module_cache = target_dir / dd_name / "ModuleCache.noindex"
+                if module_cache.exists():
+                    shutil.rmtree(module_cache, ignore_errors=True)
 
         if xcode_config:
+            _run_pre_build_commands(xcode_config, target_dir)
             self._restore_package_resolved(
                 xcode_config, repo_name, base_commit, target_dir
             )
