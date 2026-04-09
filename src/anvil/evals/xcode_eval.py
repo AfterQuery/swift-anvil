@@ -77,6 +77,21 @@ def _get_patch_text(ps: dict) -> str:
     return ps.get("patch", ps.get("model_patch", ""))
 
 
+def _normalize_unified_diff_text(patch: str) -> str:
+    """Strip trailing TABs from --- / +++ lines (some exporters add \\t before timestamp)."""
+    parts: list[str] = []
+    for line in patch.splitlines(keepends=True):
+        if line.startswith("--- ") or line.startswith("+++ "):
+            if line.endswith("\r\n"):
+                line = line[:-2].rstrip("\t") + "\r\n"
+            elif line.endswith("\n"):
+                line = line[:-1].rstrip("\t") + "\n"
+            else:
+                line = line.rstrip("\t")
+        parts.append(line)
+    return "".join(parts)
+
+
 def _result_key(iid: str, attempt: int | None) -> str:
     """Format result key for eval_results dict (e.g. 'task-1:attempt_2' or 'task-1')."""
     return f"{iid}:attempt_{attempt}" if attempt else iid
@@ -290,6 +305,7 @@ def eval_single_patch(
         )
 
         if patch and patch.strip():
+            patch = _normalize_unified_diff_text(patch)
             apply_result = subprocess.run(
                 ["git", "apply", "--allow-empty", "--ignore-whitespace"],
                 cwd=str(worktree_dir),
@@ -301,7 +317,7 @@ def eval_single_patch(
                 patch_file = worktree_dir / "_anvil_patch.diff"
                 patch_file.write_text(patch)
                 fallback = subprocess.run(
-                    ["patch", "-p1", "-i", str(patch_file)],
+                    ["patch", "-p1", "-l", "-i", str(patch_file)],
                     cwd=str(worktree_dir),
                     capture_output=True,
                     text=True,
