@@ -7,7 +7,7 @@ Converts task directories to Anvil's evaluation format which includes:
 
 Task directory layout (Xcode):
     metadata.yaml (base_commits for all tasks)
-    task-N/problem.md, task-N/solution.diff, task-N/tests.swift
+    task-N/task.md, task-N/solution.diff, task-N/tests.swift
 """
 
 from __future__ import annotations
@@ -30,16 +30,16 @@ from .models import Task
 
 
 def _load_xcode_task(task_dir: Path, repo_name: str, base_commit: str) -> Task | None:
-    """Load a Task from an Xcode-style task directory (problem.md + solution.diff)."""
-    problem_path = task_dir / "problem.md"
+    """Load a Task from an Xcode-style task directory (task.md + solution.diff)."""
+    statement_path = task_dir / "task.md"
     solution_path = task_dir / "solution.diff"
 
-    if not problem_path.exists() or not solution_path.exists():
+    if not statement_path.exists() or not solution_path.exists():
         return None
 
     return Task(
         instance_id=f"{repo_name}.{task_dir.name}",
-        problem_statement=problem_path.read_text(),
+        problem_statement=statement_path.read_text(),
         patch=solution_path.read_text(),
         base_commit=base_commit,
         repo=repo_name,
@@ -67,7 +67,7 @@ def _load_base_commits(dataset_path: Path) -> dict[str, str]:
 def load_all_tasks(dataset_path: Path) -> list[Task]:
     """Load all tasks from an Xcode-format dataset directory.
 
-    Each task-N/ must have problem.md and solution.diff.
+    Each task-N/ must have task.md and solution.diff.
     Base commits come from the root metadata.yaml.
     """
     task_dirs = sorted(

@@ -18,3 +18,4 @@ tests/__init__.py
 repos
 datasets
 tasks/firefox-ios
+tasks/iOS-Open-GPX-Tracker

@@ -109,7 +109,7 @@ Docker Hub auth for Modal uses **`REGISTRY_USERNAME`** and **`REGISTRY_PASSWORD`
 
 Each task lives under `tasks/<repo_name>/task-N/` and requires three files:
 
-**`problem.md`** — problem statement shown to the agent. Include:
+**`task.md`** — problem statement shown to the agent. Include:
 
 - What to build and why
 - Acceptance criteria

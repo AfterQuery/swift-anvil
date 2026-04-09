@@ -150,7 +150,7 @@ base_commits:
     task1_path = task_path / "task-1"
     task1_path.mkdir()
 
-    (task1_path / "problem.md").write_text("""\
+    (task1_path / "task.md").write_text("""\
 ## Feature: [Task Title]
 
 ### Problem Description
@@ -210,4 +210,4 @@ final class AnvilTask1UITests: XCTestCase {
     typer.echo(f"  1. Edit {task_path}/repo.md to add task details")
     typer.echo(f"  2. Edit {task_path}/metadata.yaml to add base commits")
     typer.echo(f"  3. Edit {task_path}/xcode_config.yaml with Xcode configuration")
-    typer.echo(f"  4. Fill in {task1_path}/problem.md, tests.swift, and uitests.swift")
+    typer.echo(f"  4. Fill in {task1_path}/task.md, tests.swift, and uitests.swift")
