@@ -68,6 +68,33 @@ def parse_build_result(returncode: int, stdout: str, stderr: str) -> dict:
     }
 
 
+def format_xcode_failure_summary(
+    stdout: str | None,
+    stderr: str | None,
+    base_msg: str,
+    *,
+    max_error_lines: int = 20,
+    max_tail_chars: int = 6000,
+) -> str:
+    """Build a failure message for saved eval JSON (xcodebuild)."""
+    out = stdout or ""
+    err = stderr or ""
+    combined = out + "\n" + err
+    error_lines: list[str] = []
+    for line in combined.splitlines():
+        if re.search(r"\berror:", line, re.IGNORECASE):
+            error_lines.append(line.strip())
+    if error_lines:
+        excerpt = "\n".join(error_lines[:max_error_lines])
+        return f"{base_msg}\n\n--- xcodebuild errors ---\n{excerpt}"
+    tail = err.strip() or out.strip()
+    if not tail:
+        return base_msg
+    if len(tail) > max_tail_chars:
+        tail = "…" + tail[-max_tail_chars:]
+    return f"{base_msg}\n\n--- xcodebuild output (truncated) ---\n{tail}"
+
+
 def merge_test_results(*results: dict) -> dict:
     """Merge multiple test result dicts into one."""
     all_tests = []

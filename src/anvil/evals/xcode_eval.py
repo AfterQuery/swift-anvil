@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import subprocess
-import tempfile
 import threading
 import time
 import traceback
@@ -19,6 +17,7 @@ from .xcode_cache import (
     XcodeBuildCache,
     _as_build_for_testing,
     _build_timeout,
+    _run_pre_build_commands,
     _build_xcodebuild_app_test_cmd,
     _build_xcodebuild_cmd,
     _build_xcodebuild_test_cmd,
@@ -30,6 +29,7 @@ from .xcode_cache import (
     resolve_test_package_path,
 )
 from .xcode_parser import (
+    format_xcode_failure_summary,
     merge_test_results,
     parse_build_result,
     parse_xcodebuild_output,
@@ -92,6 +92,17 @@ def _normalize_unified_diff_text(patch: str) -> str:
     return "".join(parts)
 
 
+def _patch_paths_contain_spaces(patch: str) -> bool:
+    """True if any ---/+++ file path contains a space (before the tab timestamp)."""
+    for line in patch.splitlines():
+        if line.startswith("--- a/") or line.startswith("+++ b/"):
+            prefix = "--- a/" if line.startswith("--- a/") else "+++ b/"
+            path_part = line[len(prefix) :].split("\t", 1)[0].strip()
+            if " " in path_part:
+                return True
+    return False
+
+
 def _result_key(iid: str, attempt: int | None) -> str:
     """Format result key for eval_results dict (e.g. 'task-1:attempt_2' or 'task-1')."""
     return f"{iid}:attempt_{attempt}" if attempt else iid
@@ -134,7 +145,12 @@ def _finalize_test_output(
     """
     output = parse_xcodebuild_output(xcode_result.stdout, xcode_result.stderr)
     if xcode_result.returncode != 0 and not output[OUTPUT_KEY_TESTS]:
-        output = failed_test_result(TEST_NAME_XCTEST_RUN, failure_msg)
+        detail = format_xcode_failure_summary(
+            xcode_result.stdout,
+            xcode_result.stderr,
+            failure_msg,
+        )
+        output = failed_test_result(TEST_NAME_XCTEST_RUN, detail)
     output["_stdout"] = (
         (extra_stdout + "\n" + xcode_result.stdout)
         if extra_stdout
@@ -293,8 +309,9 @@ def eval_single_patch(
     worktree_dir = None
 
     try:
-        worktree_dir = cache.warm_worktree_path(repo_name, base_commit)
-        warm_app_test_dd = cache.warm_app_test_dd_path(repo_name, base_commit)
+        worktree_dir = cache.eval_worktree_path(
+            repo_name, base_commit, instance_id, attempt
+        )
 
         cache.checkout(
             repo_name,
@@ -302,6 +319,7 @@ def eval_single_patch(
             worktree_dir,
             xcode_config=xcode_config,
             copy_derived_data=False,
+            run_pre_build=False,
         )
 
         if patch and patch.strip():
@@ -316,17 +334,114 @@ def eval_single_patch(
             if apply_result.returncode != 0:
                 patch_file = worktree_dir / "_anvil_patch.diff"
                 patch_file.write_text(patch)
-                fallback = subprocess.run(
-                    ["patch", "-p1", "-l", "-i", str(patch_file)],
+                git_file_result = subprocess.run(
+                    [
+                        "git",
+                        "apply",
+                        "--allow-empty",
+                        "--ignore-whitespace",
+                        str(patch_file),
+                    ],
                     cwd=str(worktree_dir),
                     capture_output=True,
                     text=True,
                 )
+                if git_file_result.returncode != 0:
+                    # Third attempt: relax whitespace further (helps some .strings hunks).
+                    git_ws = subprocess.run(
+                        [
+                            "git",
+                            "apply",
+                            "--allow-empty",
+                            "--ignore-whitespace",
+                            "--ignore-space-change",
+                            str(patch_file),
+                        ],
+                        cwd=str(worktree_dir),
+                        capture_output=True,
+                        text=True,
+                    )
+                    if git_ws.returncode != 0:
+                        # Last resort: patch(1) — but it cannot handle paths with spaces in
+                        # the filename (e.g. "OpenGpxTracker-Watch Extension/...").
+                        if _patch_paths_contain_spaces(patch):
+                            err_detail = (
+                                (git_ws.stderr or git_ws.stdout)
+                                or (git_file_result.stderr or git_file_result.stdout)
+                                or (apply_result.stderr or apply_result.stdout)
+                            )[:500]
+                            logger.warning(
+                                "Patch apply failed for %s (git apply; paths contain spaces, "
+                                "skipping patch fallback): %s",
+                                tag,
+                                err_detail[:200],
+                            )
+                            patch_file.unlink(missing_ok=True)
+                            result = failed_test_result(
+                                TEST_NAME_PATCH_APPLY, err_detail
+                            )
+                            combined_err = "\n".join(
+                                filter(
+                                    None,
+                                    [
+                                        apply_result.stderr,
+                                        git_file_result.stderr,
+                                        git_ws.stderr,
+                                    ],
+                                )
+                            )
+                            save_eval_output(
+                                output_dir,
+                                instance_id,
+                                attempt,
+                                eval_id,
+                                result,
+                                patch,
+                                combined_err or err_detail,
+                                "",
+                            )
+                            return result
+                        fallback = subprocess.run(
+                            ["patch", "-p1", "-l", "-i", str(patch_file)],
+                            cwd=str(worktree_dir),
+                            capture_output=True,
+                            text=True,
+                        )
+                        if fallback.returncode != 0:
+                            err_detail = fallback.stderr[:200] or fallback.stdout[:200]
+                            logger.warning(
+                                "Patch apply failed for %s: %s", tag, err_detail
+                            )
+                            patch_file.unlink(missing_ok=True)
+                            result = failed_test_result(
+                                TEST_NAME_PATCH_APPLY, err_detail
+                            )
+                            combined_err = "\n".join(
+                                filter(
+                                    None,
+                                    [
+                                        apply_result.stderr,
+                                        git_file_result.stderr,
+                                        git_ws.stderr,
+                                        fallback.stderr,
+                                    ],
+                                )
+                            )
+                            save_eval_output(
+                                output_dir,
+                                instance_id,
+                                attempt,
+                                eval_id,
+                                result,
+                                patch,
+                                combined_err or err_detail,
+                                "",
+                            )
+                            return result
                 patch_file.unlink(missing_ok=True)
-                if fallback.returncode != 0:
-                    err_detail = fallback.stderr[:200] or fallback.stdout[:200]
-                    logger.warning("Patch apply failed for %s: %s", tag, err_detail)
-                    return failed_test_result(TEST_NAME_PATCH_APPLY, err_detail)
+
+        if xcode_config:
+            _run_pre_build_commands(xcode_config, worktree_dir)
 
         project_rel = xcode_config.get(XCODE_CONFIG_PROJECT, "")
         if project_rel and "project.pbxproj" in patch:
@@ -421,11 +536,24 @@ def eval_single_patch(
             else base_config
         )
 
+        needs_isolated_app_test_dd = run_tests and (
+            test_type in (TEST_TYPE_APP, TEST_TYPE_UI) or has_ui_tests
+        )
+        eval_app_test_dd = (
+            cache.prepare_eval_app_test_derived_data(
+                repo_name, base_commit, worktree_dir
+            )
+            if needs_isolated_app_test_dd
+            else None
+        )
+
         xctest_output = None
         if run_tests:
             if test_type in (TEST_TYPE_APP, TEST_TYPE_UI):
                 xctest_output = _run_app_tests(
-                    test_xcode_config, worktree_dir, derived_data_dir=warm_app_test_dd
+                    test_xcode_config,
+                    worktree_dir,
+                    derived_data_dir=eval_app_test_dd,
                 )
             else:
                 xctest_output = _run_spm_tests(
@@ -456,7 +584,7 @@ def eval_single_patch(
                 ui_output = _run_app_tests(
                     ui_config,
                     worktree_dir,
-                    derived_data_dir=warm_app_test_dd,
+                    derived_data_dir=eval_app_test_dd,
                     is_ui_test=True,
                 )
                 if ui_output:

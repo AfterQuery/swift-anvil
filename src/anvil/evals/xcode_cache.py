@@ -200,9 +200,39 @@ class XcodeBuildCache:
         """Return the canonical worktree path used during cache warming."""
         return self.commit_cache_dir(repo_name, base_commit) / "worktree"
 
+    def eval_worktree_path(
+        self,
+        repo_name: str,
+        base_commit: str,
+        instance_id: str,
+        attempt: int | None,
+    ) -> Path:
+        """Isolated worktree path for eval_single_patch."""
+        label = (
+            f"{instance_id}:attempt_{attempt}"
+            if attempt is not None
+            else instance_id
+        )
+        safe = "".join(
+            c if c.isalnum() or c in "-._" else "_" for c in label
+        )
+        return self.commit_cache_dir(repo_name, base_commit) / "eval-worktrees" / safe
+
     def warm_app_test_dd_path(self, repo_name: str, base_commit: str) -> Path:
         """Return the app-test DerivedData path built during cache warming."""
         return self._app_test_derived_data_dir(repo_name, base_commit)
+
+    def prepare_eval_app_test_derived_data(
+        self, repo_name: str, base_commit: str, worktree_dir: Path
+    ) -> Path:
+        """Return a worktree-local DerivedData path for app/UI xcodebuild test runs."""
+        dest = worktree_dir / _APP_TEST_DD_DIR
+        warm = self._app_test_derived_data_dir(repo_name, base_commit)
+        _clone_dd_if_populated(warm, dest)
+        module_cache = dest / "ModuleCache.noindex"
+        if module_cache.exists():
+            shutil.rmtree(module_cache, ignore_errors=True)
+        return dest
 
     def _main_build_failed_sentinel(self, repo_name: str, base_commit: str) -> Path:
         return self.commit_cache_dir(repo_name, base_commit) / ".main_build_failed"
@@ -529,6 +559,7 @@ class XcodeBuildCache:
         target_dir: Path,
         xcode_config: dict | None = None,
         copy_derived_data: bool = True,
+        run_pre_build: bool = True,
     ) -> Path:
         """Create an isolated worktree with pre-built DerivedData.
 
@@ -575,7 +606,8 @@ class XcodeBuildCache:
                     shutil.rmtree(module_cache, ignore_errors=True)
 
         if xcode_config:
-            _run_pre_build_commands(xcode_config, target_dir)
+            if run_pre_build:
+                _run_pre_build_commands(xcode_config, target_dir)
             self._restore_package_resolved(
                 xcode_config, repo_name, base_commit, target_dir
             )
