@@ -150,7 +150,9 @@ def get_app_test_destination(xcode_config: dict) -> str:
 
 def get_app_bundle_name(xcode_config: dict) -> str:
     """Resolve app bundle name from config (app_bundle_name or scheme)."""
-    return xcode_config.get("app_bundle_name") or xcode_config.get(XCODE_CONFIG_SCHEME, "")
+    return xcode_config.get("app_bundle_name") or xcode_config.get(
+        XCODE_CONFIG_SCHEME, ""
+    )
 
 
 def resolve_test_package_path(xcode_config: dict, work_dir: Path) -> str:
@@ -209,13 +211,9 @@ class XcodeBuildCache:
     ) -> Path:
         """Isolated worktree path for eval_single_patch."""
         label = (
-            f"{instance_id}:attempt_{attempt}"
-            if attempt is not None
-            else instance_id
+            f"{instance_id}:attempt_{attempt}" if attempt is not None else instance_id
         )
-        safe = "".join(
-            c if c.isalnum() or c in "-._" else "_" for c in label
-        )
+        safe = "".join(c if c.isalnum() or c in "-._" else "_" for c in label)
         return self.commit_cache_dir(repo_name, base_commit) / "eval-worktrees" / safe
 
     def warm_app_test_dd_path(self, repo_name: str, base_commit: str) -> Path:
@@ -223,10 +221,26 @@ class XcodeBuildCache:
         return self._app_test_derived_data_dir(repo_name, base_commit)
 
     def prepare_eval_app_test_derived_data(
-        self, repo_name: str, base_commit: str, worktree_dir: Path
+        self,
+        repo_name: str,
+        base_commit: str,
+        worktree_dir: Path,
+        xcode_config: dict | None = None,
     ) -> Path:
         """Return a worktree-local DerivedData path for app/UI xcodebuild test runs."""
         dest = worktree_dir / _APP_TEST_DD_DIR
+
+        # When skip_warm_app_test_dd is set in xcode_config, don't clone the
+        # warm DerivedData.
+        if xcode_config and xcode_config.get("skip_warm_app_test_dd"):
+            logger.warning(
+                "skip_warm_app_test_dd: skipping warm DD clone for %s", worktree_dir
+            )
+            # If a previous clone left stale DD, remove it
+            if dest.exists():
+                shutil.rmtree(dest, ignore_errors=True)
+            return dest
+
         warm = self._app_test_derived_data_dir(repo_name, base_commit)
         _clone_dd_if_populated(warm, dest)
         module_cache = dest / "ModuleCache.noindex"
@@ -333,9 +347,9 @@ class XcodeBuildCache:
             if result.returncode != 0:
                 summary = _format_build_errors(result.stderr)
                 shutil.rmtree(dd_dir, ignore_errors=True)
-                has_test_schemes = xcode_config.get(XCODE_CONFIG_TEST_SCHEME) or xcode_config.get(
-                    XCODE_CONFIG_APP_TEST_SCHEME
-                )
+                has_test_schemes = xcode_config.get(
+                    XCODE_CONFIG_TEST_SCHEME
+                ) or xcode_config.get(XCODE_CONFIG_APP_TEST_SCHEME)
                 if has_test_schemes:
                     # Main build failed but test DDs can still be warmed independently.
                     # Write a sentinel so we don't retry this failing build next time.
@@ -598,7 +612,10 @@ class XcodeBuildCache:
             for dd_name, cache_dd in [
                 (_DD_DIR, self._derived_data_dir(repo_name, base_commit)),
                 (_TEST_DD_DIR, self._test_derived_data_dir(repo_name, base_commit)),
-                (_APP_TEST_DD_DIR, self._app_test_derived_data_dir(repo_name, base_commit)),
+                (
+                    _APP_TEST_DD_DIR,
+                    self._app_test_derived_data_dir(repo_name, base_commit),
+                ),
             ]:
                 _clone_dd_if_populated(cache_dd, target_dir / dd_name)
                 module_cache = target_dir / dd_name / "ModuleCache.noindex"
@@ -1145,39 +1162,39 @@ def _inject_test_target(
         proj_container = project_rel.split("/")[-1]
         minimal_scheme = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
-            '<Scheme\n'
+            "<Scheme\n"
             '   LastUpgradeVersion = "1620"\n'
             '   version = "1.7">\n'
-            '   <BuildAction\n'
+            "   <BuildAction\n"
             '      parallelizeBuildables = "YES"\n'
             '      buildImplicitly = "YES">\n'
-            '      <BuildActionEntries>\n'
-            '         <BuildActionEntry\n'
+            "      <BuildActionEntries>\n"
+            "         <BuildActionEntry\n"
             '            buildForTesting = "YES"\n'
             '            buildForRunning = "YES"\n'
             '            buildForProfiling = "YES"\n'
             '            buildForArchiving = "YES"\n'
             '            buildForAnalyzing = "YES">\n'
-            '            <BuildableReference\n'
+            "            <BuildableReference\n"
             '               BuildableIdentifier = "primary"\n'
             f'               BlueprintIdentifier = "{host_target_uuid}"\n'
             f'               BuildableName = "{app_product_name}.app"\n'
             f'               BlueprintName = "{scheme_name}"\n'
             f'               ReferencedContainer = "container:{proj_container}">\n'
-            '            </BuildableReference>\n'
-            '         </BuildActionEntry>\n'
-            '      </BuildActionEntries>\n'
-            '   </BuildAction>\n'
-            '   <TestAction\n'
+            "            </BuildableReference>\n"
+            "         </BuildActionEntry>\n"
+            "      </BuildActionEntries>\n"
+            "   </BuildAction>\n"
+            "   <TestAction\n"
             '      buildConfiguration = "Debug"\n'
             '      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"\n'
             '      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"\n'
             '      shouldUseLaunchSchemeArgsEnv = "YES">\n'
-            '      <Testables>\n'
-            f'{testable_entry}'
-            '      </Testables>\n'
-            '   </TestAction>\n'
-            '   <LaunchAction\n'
+            "      <Testables>\n"
+            f"{testable_entry}"
+            "      </Testables>\n"
+            "   </TestAction>\n"
+            "   <LaunchAction\n"
             '      buildConfiguration = "Debug"\n'
             '      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"\n'
             '      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"\n'
@@ -1187,18 +1204,18 @@ def _inject_test_target(
             '      debugDocumentVersioning = "YES"\n'
             '      debugServiceExtension = "internal"\n'
             '      allowLocationSimulation = "YES">\n'
-            '      <BuildableProductRunnable\n'
+            "      <BuildableProductRunnable\n"
             '         runnableDebuggingMode = "0">\n'
-            '         <BuildableReference\n'
+            "         <BuildableReference\n"
             '            BuildableIdentifier = "primary"\n'
             f'            BlueprintIdentifier = "{host_target_uuid}"\n'
             f'            BuildableName = "{app_product_name}.app"\n'
             f'            BlueprintName = "{scheme_name}"\n'
             f'            ReferencedContainer = "container:{proj_container}">\n'
-            '         </BuildableReference>\n'
-            '      </BuildableProductRunnable>\n'
-            '   </LaunchAction>\n'
-            '</Scheme>\n'
+            "         </BuildableReference>\n"
+            "      </BuildableProductRunnable>\n"
+            "   </LaunchAction>\n"
+            "</Scheme>\n"
         )
         scheme_path.write_text(minimal_scheme)
         logger.info("Created minimal scheme file at %s", scheme_path)
@@ -1275,7 +1292,9 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
         files_dest=xcode_config.get(XCODE_CONFIG_APP_TEST_FILES_DEST, ""),
         project_rel=xcode_config.get(XCODE_CONFIG_PROJECT, ""),
         bundle_id=xcode_config.get("app_test_bundle_id", "com.anvil.tests"),
-        scheme_name=xcode_config.get(XCODE_CONFIG_APP_TEST_SCHEME, xcode_config.get(XCODE_CONFIG_SCHEME, "")),
+        scheme_name=xcode_config.get(
+            XCODE_CONFIG_APP_TEST_SCHEME, xcode_config.get(XCODE_CONFIG_SCHEME, "")
+        ),
         product_type="com.apple.product-type.bundle.unit-test",
         is_ui_test=False,
     )
@@ -1296,7 +1315,9 @@ def inject_ui_test_target(xcode_config: dict, work_dir: Path) -> bool:
         files_dest=xcode_config.get(XCODE_CONFIG_UI_TEST_FILES_DEST, ""),
         project_rel=xcode_config.get(XCODE_CONFIG_PROJECT, ""),
         bundle_id=xcode_config.get("ui_test_bundle_id", "com.anvil.uitests"),
-        scheme_name=xcode_config.get("ui_test_scheme", xcode_config.get(XCODE_CONFIG_SCHEME, "")),
+        scheme_name=xcode_config.get(
+            "ui_test_scheme", xcode_config.get(XCODE_CONFIG_SCHEME, "")
+        ),
         product_type="com.apple.product-type.bundle.ui-testing",
         is_ui_test=True,
     )

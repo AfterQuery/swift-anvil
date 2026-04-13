@@ -541,7 +541,8 @@ def eval_single_patch(
         )
         eval_app_test_dd = (
             cache.prepare_eval_app_test_derived_data(
-                repo_name, base_commit, worktree_dir
+                repo_name, base_commit, worktree_dir,
+                xcode_config=xcode_config,
             )
             if needs_isolated_app_test_dd
             else None

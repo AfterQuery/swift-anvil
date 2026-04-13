@@ -8,6 +8,7 @@ tests/__init__.py
 .pytest_cache
 
 # Local Working Stuff
+/scripts
 .env
 .claude
 .pdm-build
@@ -19,3 +20,4 @@ repos
 datasets
 tasks/firefox-ios
 tasks/iOS-Open-GPX-Tracker
+tasks/mastodon-ios
