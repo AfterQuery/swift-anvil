@@ -1,8 +1,12 @@
 #!/bin/sh
-set -e
 
-echo "Running formatter..."
-make format
+# Auto-format and stage changes
+make format > /dev/null 2>&1
+git add -u
 
-echo "Running tests..."
-make test
+# Run tests silently — only show output on failure
+if ! test_output=$(make test 2>&1); then
+    echo "Tests failed:"
+    echo "$test_output"
+    exit 1
+fi
