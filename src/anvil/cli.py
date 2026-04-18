@@ -1,25 +1,19 @@
 """Anvil CLI - SWE-Bench Pro evaluation toolkit."""
 
-from pathlib import Path
 from typing import Sequence
 
 import typer
 
 from . import __version__
+from .config import load_repo_env
 from .publish import publish_images
 from .run_evals import run_evals
 from .setup_repo import setup_repo
 from .warm_cache import warm_xcode_cache
 from .wizard.converters import convert_dataset
 
-# Load environment variables from .env file if it exists
-try:
-    from dotenv import load_dotenv
-    _env_path = Path(__file__).resolve().parents[2] / ".env"
-    if _env_path.exists():
-        load_dotenv(_env_path)
-except ImportError:
-    pass
+# Load environment variables from repo-root .env file if it exists.
+load_repo_env()
 
 app = typer.Typer(help="AQ Project Anvil - SWE-Bench Pro Tasks", no_args_is_help=True)
 app.command("publish-images", no_args_is_help=True)(publish_images)

@@ -5,6 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 
 
+def load_repo_env() -> None:
+    """Load environment variables from repo-root `.env` if available."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+
+    env_path = repo_root() / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+
+
 def repo_root() -> Path:
     """Return the anvil repository root directory."""
     return Path(__file__).resolve().parents[2]
@@ -28,6 +40,7 @@ def runs_dir(dataset_id: str) -> Path:
 def eval_dir(dataset_id: str, eval_id: str) -> Path:
     """Return the output directory for an evaluation run."""
     return runs_dir(dataset_id) / eval_id
+
 
 def source_tasks_dir(dataset_id: str) -> Path:
     """Return the source tasks directory for a dataset (e.g. tasks/ACHNBrowserUI/).

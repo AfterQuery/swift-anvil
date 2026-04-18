@@ -24,7 +24,7 @@ from ..agents.harness import (
     run_agent_in_modal,
     write_single_result,
 )
-from ..config import eval_dir, tasks_dir
+from ..config import eval_dir, load_repo_env, tasks_dir
 from ..util import ensure_dir, model_id_from_model, provider_env_var_from_model
 from .pass_at_k import (
     compute_pass_at_k_summary,
@@ -153,11 +153,7 @@ def run_evaluation(
     run_ui_tests: bool = True,
 ) -> int:
     """Run full evaluation with an agent on a dataset."""
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(Path(__file__).resolve().parents[3] / ".env")
-    except ImportError:
-        pass
+    load_repo_env()
 
     # Oracle agent doesn't need a model
     if agent == "oracle":
