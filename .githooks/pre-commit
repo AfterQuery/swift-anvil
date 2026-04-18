@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+echo "Running formatter..."
+make format
+
+echo "Running tests..."
+make test

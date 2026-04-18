@@ -7,6 +7,7 @@ setup:
 	@xcrun simctl list runtimes 2>/dev/null | grep -q com.apple.CoreSimulator.SimRuntime.iOS \
 		|| xcodebuild -downloadPlatform iOS
 	cp -n .env.example .env || true
+	git config core.hooksPath .githooks
 
 test:
 	uv sync --group dev

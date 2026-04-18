@@ -6,6 +6,7 @@ __pycache__/
 *.egg-info/
 tests/__init__.py
 .pytest_cache
+.ruff_cache
 
 # Local Working Stuff
 /scripts
