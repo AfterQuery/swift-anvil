@@ -78,7 +78,9 @@ def _get_completed_rollouts(
 ) -> set[tuple[str, int]]:
     """Return set of (instance_id, attempt) pairs that have valid completed rollouts."""
     return _get_completed_attempts(
-        base_out, instances, k,
+        base_out,
+        instances,
+        k,
         rel_path="rollout/metadata.json",
         valid=lambda m: m.get("exit_code") == 0 and m.get("error") is None,
     )
@@ -89,7 +91,9 @@ def _get_completed_evals(
 ) -> set[tuple[str, int]]:
     """Return set of (instance_id, attempt) pairs that have valid completed evals."""
     return _get_completed_attempts(
-        base_out, instances, k,
+        base_out,
+        instances,
+        k,
         rel_path="eval_results/eval_results.json",
         valid=lambda _: True,
     )
@@ -132,7 +136,10 @@ def _cleanup_bad_evals(base_out: Path, instances: list[dict], k: int) -> int:
         iid = inst["instance_id"]
         for attempt in range(1, k + 1):
             eval_results_dir = base_out / iid / f"attempt_{attempt}" / "eval_results"
-            if eval_results_dir.exists() and not (eval_results_dir / "eval_results.json").exists():
+            if (
+                eval_results_dir.exists()
+                and not (eval_results_dir / "eval_results.json").exists()
+            ):
                 _move_to_errors(eval_results_dir, base_out, errors_dir)
                 moved += 1
     return moved
@@ -168,17 +175,21 @@ def run_evaluation(
     if agent != "oracle" and (not reg_user or not reg_pass):
         typer.echo("Error: REGISTRY_USERNAME and REGISTRY_PASSWORD must be set")
         typer.echo("")
-        typer.echo("These credentials are required to pull Docker images from Docker Hub.")
+        typer.echo(
+            "These credentials are required to pull Docker images from Docker Hub."
+        )
         typer.echo("Set them in your environment or in a .env file at the repo root:")
         typer.echo("")
         typer.echo("  export REGISTRY_USERNAME=your_dockerhub_username")
         typer.echo("  export REGISTRY_PASSWORD=your_dockerhub_access_token")
         typer.echo("")
-        typer.echo("You can create an access token at https://hub.docker.com/settings/security")
+        typer.echo(
+            "You can create an access token at https://hub.docker.com/settings/security"
+        )
         return 1
 
     k = n_attempts
-    
+
     # Validate k
     if k < 1:
         typer.echo("Error: --n-attempts must be at least 1")
@@ -191,19 +202,23 @@ def run_evaluation(
     start_time = time.time()
     eval_id = _eval_id(agent, model, run_ui_tests=run_ui_tests)
     base_out_path = Path(output) if output else eval_dir(dataset_id, eval_id)
-    
+
     # Handle --no-continue: delete existing results directory
     if no_continue and base_out_path.exists():
         shutil.rmtree(base_out_path)
         typer.echo(f"Deleted existing results: {base_out_path}")
-    
+
     base_out = ensure_dir(base_out_path)
     instances = load_instances(dataset_id)
 
     if task_filter:
         # Accept full instance IDs or short suffixes (e.g. "task-7" matches "ACHNBrowserUI.task-7")
         def _matches(iid: str) -> bool:
-            return any(iid == f or iid.endswith(f".{f}") or iid.endswith(f) for f in task_filter)
+            return any(
+                iid == f or iid.endswith(f".{f}") or iid.endswith(f)
+                for f in task_filter
+            )
+
         instances = [i for i in instances if _matches(i["instance_id"])]
         if not instances:
             typer.echo(f"Error: no instances matched filter: {task_filter}", err=True)
@@ -214,7 +229,14 @@ def run_evaluation(
 
     typer.echo(f"Running {agent} evaluation on {dataset_id}")
     typer.echo(f"  Model: {model}")
-    typer.echo(f"  Tasks: {n_tasks}" + (f" (filtered: {[i['instance_id'] for i in instances]})" if task_filter else ""))
+    typer.echo(
+        f"  Tasks: {n_tasks}"
+        + (
+            f" (filtered: {[i['instance_id'] for i in instances]})"
+            if task_filter
+            else ""
+        )
+    )
     typer.echo(f"  Attempts: {k}")
     typer.echo(f"  UI tests: {'on' if run_ui_tests else 'off (unit tests only)'}")
     typer.echo(f"  Output: {base_out}")
@@ -240,12 +262,14 @@ def run_evaluation(
             if iid not in instance_ids:
                 continue
             if (iid, 1) not in completed_evals:
-                all_patches.append({
-                    "instance_id": iid,
-                    "patch": p.get("patch", ""),
-                    "prefix": eval_id,
-                    "attempt": 1,
-                })
+                all_patches.append(
+                    {
+                        "instance_id": iid,
+                        "patch": p.get("patch", ""),
+                        "prefix": eval_id,
+                        "attempt": 1,
+                    }
+                )
     else:
         # ---- Non-oracle: run agent rollouts ----
         bad_moved = _cleanup_bad_rollouts(base_out, instances, k)
@@ -263,7 +287,9 @@ def run_evaluation(
         complete_runs = total_runs - remaining_runs
 
         if remaining_runs == 0:
-            typer.echo(f"Rollouts: {complete_runs}/{total_runs} complete, nothing to run")
+            typer.echo(
+                f"Rollouts: {complete_runs}/{total_runs} complete, nothing to run"
+            )
         else:
             status = f"Rollouts: {complete_runs}/{total_runs} complete, running {remaining_runs}"
             if bad_moved > 0:
@@ -282,19 +308,27 @@ def run_evaluation(
                 import modal
 
                 modal.enable_output()
-                os.environ.setdefault("MODAL_MAX_THROTTLE_WAIT", str(max_wait_minutes * 60))
+                os.environ.setdefault(
+                    "MODAL_MAX_THROTTLE_WAIT", str(max_wait_minutes * 60)
+                )
 
                 app = modal.App.lookup("anvil-agent-harness", create_if_missing=True)
 
                 registry_secret = None
-                if os.environ.get("REGISTRY_USERNAME") and os.environ.get("REGISTRY_PASSWORD"):
-                    registry_secret = modal.Secret.from_dict({
-                        "REGISTRY_USERNAME": os.environ["REGISTRY_USERNAME"],
-                        "REGISTRY_PASSWORD": os.environ["REGISTRY_PASSWORD"],
-                    })
+                if os.environ.get("REGISTRY_USERNAME") and os.environ.get(
+                    "REGISTRY_PASSWORD"
+                ):
+                    registry_secret = modal.Secret.from_dict(
+                        {
+                            "REGISTRY_USERNAME": os.environ["REGISTRY_USERNAME"],
+                            "REGISTRY_PASSWORD": os.environ["REGISTRY_PASSWORD"],
+                        }
+                    )
 
                 semaphore = asyncio.Semaphore(max_parallel)
-                pbar = tqdm(total=remaining_runs, desc="Agent runs", unit="run", file=sys.stderr)
+                pbar = tqdm(
+                    total=remaining_runs, desc="Agent runs", unit="run", file=sys.stderr
+                )
 
                 async def run_one(inst: dict, attempt: int) -> AgentResult:
                     async with semaphore:
@@ -311,10 +345,16 @@ def run_evaluation(
                         results_by_instance[iid][attempt - 1] = result
 
                         if attempt <= keep_n:
-                            result_dir = base_out / iid / f"attempt_{attempt}" / "rollout"
+                            result_dir = (
+                                base_out / iid / f"attempt_{attempt}" / "rollout"
+                            )
                             write_single_result(result, result_dir, eval_id)
 
-                        status = "ok" if result.exit_code == 0 and not result.error else "fail"
+                        status = (
+                            "ok"
+                            if result.exit_code == 0 and not result.error
+                            else "fail"
+                        )
                         pbar.set_postfix_str(f"{iid}:{attempt} {status}")
                         pbar.update(1)
 
@@ -348,7 +388,9 @@ def run_evaluation(
                 if (iid, attempt) in completed_evals:
                     continue
 
-                pred_path = base_out / iid / f"attempt_{attempt}" / "rollout" / f"{iid}.pred"
+                pred_path = (
+                    base_out / iid / f"attempt_{attempt}" / "rollout" / f"{iid}.pred"
+                )
                 patch = ""
                 if pred_path.exists():
                     try:
@@ -357,12 +399,14 @@ def run_evaluation(
                     except (json.JSONDecodeError, OSError):
                         pass
 
-                all_patches.append({
-                    "instance_id": iid,
-                    "patch": patch,
-                    "prefix": eval_id,
-                    "attempt": attempt,
-                })
+                all_patches.append(
+                    {
+                        "instance_id": iid,
+                        "patch": patch,
+                        "prefix": eval_id,
+                        "attempt": attempt,
+                    }
+                )
 
     total_evals = n_tasks * k
     remaining_evals = len(all_patches)
@@ -371,7 +415,9 @@ def run_evaluation(
     if remaining_evals == 0:
         typer.echo(f"Evals: {complete_evals}/{total_evals} complete, nothing to run")
     else:
-        eval_status = f"Evals: {complete_evals}/{total_evals} complete, running {remaining_evals}"
+        eval_status = (
+            f"Evals: {complete_evals}/{total_evals} complete, running {remaining_evals}"
+        )
         if bad_eval_moved > 0:
             eval_status += f" ({bad_eval_moved} bad moved to __errors/)"
         typer.echo(eval_status)
@@ -406,7 +452,11 @@ def run_evaluation(
                 eval_results[iid].append(all_results[key])
             else:
                 task_result_path = (
-                    base_out / iid / f"attempt_{attempt}" / "eval_results" / "eval_results.json"
+                    base_out
+                    / iid
+                    / f"attempt_{attempt}"
+                    / "eval_results"
+                    / "eval_results.json"
                 )
                 if task_result_path.exists():
                     try:
@@ -432,5 +482,5 @@ def run_evaluation(
     )
     print_pass_at_k_summary(summary)
     save_pass_at_k_json(summary, base_out / "eval_results_pass_at_k.json")
-    
+
     return 0 if any(r.solved for r in summary.per_instance) else 1

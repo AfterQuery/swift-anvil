@@ -83,7 +83,7 @@ def run_dataset_batch(
     env_var_name = provider_env_var.lstrip("$")
     if not os.environ.get(env_var_name):
         typer.echo(
-            f"Error: {provider_env_var} is not set. "
+            f"Error: {provider_env_var} is not set. ",
             err=True,
         )
         raise typer.Exit(1)

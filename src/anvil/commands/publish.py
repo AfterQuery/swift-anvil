@@ -16,7 +16,13 @@ from ruamel.yaml import YAML
 
 from ..util import resolve_registry_env
 
-_RETRYABLE_PUSH_ERRORS = ("broken pipe", "connection reset", "timeout", "EOF", "TLS handshake")
+_RETRYABLE_PUSH_ERRORS = (
+    "broken pipe",
+    "connection reset",
+    "timeout",
+    "EOF",
+    "TLS handshake",
+)
 
 
 @dataclass
@@ -78,7 +84,9 @@ def _discover_build_tasks(tasks_dir: Path) -> tuple[list[BuildTask], list[BuildT
             local_repo = repos_dir / name
             if (local_repo / ".git").is_dir():
                 context = local_repo
-            base_tasks.append(BuildTask(name=f"{name}.base", dockerfile=dockerfile, context=context))
+            base_tasks.append(
+                BuildTask(name=f"{name}.base", dockerfile=dockerfile, context=context)
+            )
 
     # Instance images: built from instance_dockerfile/<project>.<task>/Dockerfile
     instance_tasks = []
@@ -93,12 +101,18 @@ def _discover_build_tasks(tasks_dir: Path) -> tuple[list[BuildTask], list[BuildT
                 local_repo = repos_dir / project
                 if (local_repo / ".git").is_dir():
                     context = local_repo
-                instance_tasks.append(BuildTask(name=task_dir.name, dockerfile=dockerfile, context=context))
+                instance_tasks.append(
+                    BuildTask(
+                        name=task_dir.name, dockerfile=dockerfile, context=context
+                    )
+                )
 
     return base_tasks, instance_tasks
 
 
-def _patch_dockerfile_if_needed(dockerfile: Path, username: str, repo: str, context: Path | None = None) -> str:
+def _patch_dockerfile_if_needed(
+    dockerfile: Path, username: str, repo: str, context: Path | None = None
+) -> str:
     """Return Dockerfile content with COPY . . inserted after FROM if missing.
 
     When *context* points to a local repo clone, ``RUN git clone …`` lines are
@@ -108,7 +122,13 @@ def _patch_dockerfile_if_needed(dockerfile: Path, username: str, repo: str, cont
     content = dockerfile.read_text()
 
     # Rewrite FROM to use user's repo
-    content = re.sub(r"^(FROM\s+)\S+/\S+:", rf"\1{username}/{repo}:", content, count=1, flags=re.MULTILINE)
+    content = re.sub(
+        r"^(FROM\s+)\S+/\S+:",
+        rf"\1{username}/{repo}:",
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
 
     # Replace `RUN git clone <url> <dest>` with COPY from local context.
     if context and (context / ".git").is_dir():
@@ -149,25 +169,37 @@ def _push_with_retry(tag: str, max_retries: int = 3) -> tuple[bool, str]:
         if not retryable or attempt == max_retries:
             return False, full_err
         wait = 5 * attempt
-        print(f"  Push attempt {attempt}/{max_retries} failed (retrying in {wait}s): {full_err.splitlines()[-1]}")
+        print(
+            f"  Push attempt {attempt}/{max_retries} failed (retrying in {wait}s): {full_err.splitlines()[-1]}"
+        )
         time.sleep(wait)
     return False, "max retries exceeded"
 
 
-def _build_and_push(task: BuildTask, username: str, repo: str, platform: str) -> tuple[str | None, str | None]:
+def _build_and_push(
+    task: BuildTask, username: str, repo: str, platform: str
+) -> tuple[str | None, str | None]:
     """Build and push a Docker image. Returns (tag, None) on success, (None, error) on failure."""
     tag = task.tag(username, repo)
-    patched_content = _patch_dockerfile_if_needed(task.dockerfile, username, repo, context=task.context)
+    patched_content = _patch_dockerfile_if_needed(
+        task.dockerfile, username, repo, context=task.context
+    )
 
     build_cmd = [
-        "docker", "build",
-        "--platform", platform,
+        "docker",
+        "build",
+        "--platform",
+        platform,
         "--provenance=false",
-        "-f", "-",
-        "-t", tag,
+        "-f",
+        "-",
+        "-t",
+        tag,
         str(task.context),
     ]
-    result = subprocess.run(build_cmd, input=patched_content, capture_output=True, text=True)
+    result = subprocess.run(
+        build_cmd, input=patched_content, capture_output=True, text=True
+    )
     if result.returncode != 0:
         stderr_lines = result.stderr.strip().split("\n")
         err_detail = stderr_lines[-1] if stderr_lines else "build failed"
@@ -212,15 +244,28 @@ def _update_instances_yaml(
 
 def publish_images(
     dataset_id: str = typer.Option(..., "--dataset", help="Dataset ID"),
-    dockerhub_username: str = typer.Option("", "--dockerhub-username", "-u", help="Docker Hub username (defaults to REGISTRY_USERNAME from .env)"),
+    dockerhub_username: str = typer.Option(
+        "",
+        "--dockerhub-username",
+        "-u",
+        help="Docker Hub username (defaults to REGISTRY_USERNAME from .env)",
+    ),
     platform: str = typer.Option("linux/amd64", "--platform", help="Docker platform"),
     repo_name: str = typer.Option("", "--repo", help="Docker Hub repository name"),
-    max_workers: int = typer.Option(4, "--max-workers", "-j", help="Max parallel builds (lower to avoid rate limits)"),
+    max_workers: int = typer.Option(
+        4,
+        "--max-workers",
+        "-j",
+        help="Max parallel builds (lower to avoid rate limits)",
+    ),
 ) -> None:
     """Build and push dataset images to your private Docker Hub."""
     dockerhub_username, repo_name = resolve_registry_env(dockerhub_username, repo_name)
     if not dockerhub_username:
-        typer.echo("Docker Hub username required. Set REGISTRY_USERNAME in .env or pass -u.", err=True)
+        typer.echo(
+            "Docker Hub username required. Set REGISTRY_USERNAME in .env or pass -u.",
+            err=True,
+        )
         raise typer.Exit(1)
 
     tasks_dir = Path(dataset_id) / "tasks"
@@ -230,7 +275,10 @@ def publish_images(
         raise typer.Exit(1)
 
     if _is_public_repo(dockerhub_username, repo_name):
-        typer.echo(f"Repository {dockerhub_username}/{repo_name} is PUBLIC. Refusing to push.", err=True)
+        typer.echo(
+            f"Repository {dockerhub_username}/{repo_name} is PUBLIC. Refusing to push.",
+            err=True,
+        )
         raise typer.Exit(1)
 
     base_tasks, instance_tasks = _discover_build_tasks(tasks_dir)
@@ -239,7 +287,9 @@ def publish_images(
         typer.echo(f"No Dockerfiles found in {tasks_dir}/dockerfiles/", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Building {len(all_tasks)} image(s) ({len(base_tasks)} base + {len(instance_tasks)} instance)...")
+    typer.echo(
+        f"Building {len(all_tasks)} image(s) ({len(base_tasks)} base + {len(instance_tasks)} instance)..."
+    )
 
     built: dict[str, str] = {}
     failed: list[str] = []
@@ -250,7 +300,9 @@ def publish_images(
             return
         with ThreadPoolExecutor(max_workers=min(len(tasks), max_workers)) as executor:
             futures = {
-                executor.submit(_build_and_push, task, dockerhub_username, repo_name, platform): task
+                executor.submit(
+                    _build_and_push, task, dockerhub_username, repo_name, platform
+                ): task
                 for task in tasks
             }
             for future in as_completed(futures):
@@ -262,10 +314,15 @@ def publish_images(
                         typer.echo(f"[{counter[0]}/{len(all_tasks)}] {task.name} ✓")
                         built[task.name] = tag
                     else:
-                        typer.echo(f"[{counter[0]}/{len(all_tasks)}] {task.name} ✗ {err}", err=True)
+                        typer.echo(
+                            f"[{counter[0]}/{len(all_tasks)}] {task.name} ✗ {err}",
+                            err=True,
+                        )
                         failed.append(task.name)
                 except Exception as e:
-                    typer.echo(f"[{counter[0]}/{len(all_tasks)}] {task.name} ✗ {e}", err=True)
+                    typer.echo(
+                        f"[{counter[0]}/{len(all_tasks)}] {task.name} ✗ {e}", err=True
+                    )
                     failed.append(task.name)
 
     run_builds(base_tasks)
@@ -277,7 +334,9 @@ def publish_images(
 
     inst_path = tasks_dir / "instances.yaml"
     if inst_path.exists():
-        updated = _update_instances_yaml(inst_path, built, dockerhub_username, repo_name)
+        updated = _update_instances_yaml(
+            inst_path, built, dockerhub_username, repo_name
+        )
         typer.echo(f"Updated {updated} instance(s) in instances.yaml")
     else:
         typer.echo(f"{inst_path} not found, skipping update", err=True)

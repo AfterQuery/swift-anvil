@@ -14,12 +14,16 @@ def run_evals(
     dataset: str = typer.Option(..., "--dataset", help="Dataset ID or path"),
     agent: Annotated[
         str,
-        typer.Option("--agent", help="Agent to use for evaluation (oracle runs golden patches)"),
+        typer.Option(
+            "--agent", help="Agent to use for evaluation (oracle runs golden patches)"
+        ),
     ] = "mini-swe-agent",
     n_attempts: Annotated[
         int,
         typer.Option(
-            "--n-attempts", "-n", help="Number of attempts per task for pass@k evaluation"
+            "--n-attempts",
+            "-n",
+            help="Number of attempts per task for pass@k evaluation",
         ),
     ] = 1,
     max_wait: Annotated[

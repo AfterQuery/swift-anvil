@@ -541,7 +541,9 @@ def eval_single_patch(
         )
         eval_app_test_dd = (
             cache.prepare_eval_app_test_derived_data(
-                repo_name, base_commit, worktree_dir,
+                repo_name,
+                base_commit,
+                worktree_dir,
                 xcode_config=xcode_config,
             )
             if needs_isolated_app_test_dd
@@ -865,7 +867,7 @@ def run_xcode_evals(
     avg_s = sum(eval_durations) / len(eval_durations) if eval_durations else 0
     typer.echo(
         f"Xcode eval complete: {passed_count}/{len(eval_results)} passed"
-        f"  |  avg eval time: {avg_s:.0f}s ({avg_s/60:.1f}m)"
+        f"  |  avg eval time: {avg_s:.0f}s ({avg_s / 60:.1f}m)"
     )
 
     return eval_results

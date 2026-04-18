@@ -83,7 +83,11 @@ def load_all_tasks(dataset_path: Path) -> list[Task]:
     Base commits come from the root metadata.yaml.
     """
     task_dirs = sorted(
-        [d for d in dataset_path.iterdir() if d.is_dir() and d.name.startswith("task-")],
+        [
+            d
+            for d in dataset_path.iterdir()
+            if d.is_dir() and d.name.startswith("task-")
+        ],
         key=lambda d: d.name,
     )
 
@@ -95,7 +99,10 @@ def load_all_tasks(dataset_path: Path) -> list[Task]:
         base_commit = base_commits.get(item.name, "")
 
         if not base_commit:
-            print(f"Warning: {item.name}: no base_commit in metadata.yaml — skipping", file=sys.stderr)
+            print(
+                f"Warning: {item.name}: no base_commit in metadata.yaml — skipping",
+                file=sys.stderr,
+            )
             continue
 
         task = _load_xcode_task(item, repo_name, base_commit)
@@ -124,7 +131,9 @@ def generate_instances_yaml(
         }
 
         if dockerhub_username:
-            instance["image_name"] = f"{dockerhub_username}/{dockerhub_repo}:{task.instance_id}"
+            instance["image_name"] = (
+                f"{dockerhub_username}/{dockerhub_repo}:{task.instance_id}"
+            )
         if task.before_repo_set_cmd:
             instance["before_repo_set_cmd"] = task.before_repo_set_cmd
 
@@ -193,7 +202,9 @@ def convert_to_anvil_structure(
         try:
             result = subprocess.run(
                 ["git", "remote", "get-url", "origin"],
-                cwd=str(repo_source), capture_output=True, text=True,
+                cwd=str(repo_source),
+                capture_output=True,
+                text=True,
             )
             if result.returncode == 0:
                 remote_url = result.stdout.strip()
@@ -223,7 +234,8 @@ def convert_to_anvil_structure(
 
         if not remote_url:
             shutil.copytree(
-                repo_source, dockerfiles_base_dir,
+                repo_source,
+                dockerfiles_base_dir,
                 dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns(".git"),
             )
@@ -258,7 +270,12 @@ def convert_to_anvil_structure(
 def convert_dataset(
     dataset: Annotated[str, typer.Option("--dataset", "-d", help="Dataset path")],
     dockerhub_username: Annotated[
-        str, typer.Option("--dockerhub-username", "-u", help="Docker Hub username (defaults to REGISTRY_USERNAME from .env)")
+        str,
+        typer.Option(
+            "--dockerhub-username",
+            "-u",
+            help="Docker Hub username (defaults to REGISTRY_USERNAME from .env)",
+        ),
     ] = "",
     dockerhub_repo: Annotated[
         str, typer.Option("--dockerhub-repo", help="Docker Hub repository name")
@@ -272,7 +289,9 @@ def convert_dataset(
     Generates instances.yaml, gold_patches.json, and the directory structure
     required for Anvil's publish-images and run-evals commands.
     """
-    dockerhub_username, dockerhub_repo = resolve_registry_env(dockerhub_username, dockerhub_repo)
+    dockerhub_username, dockerhub_repo = resolve_registry_env(
+        dockerhub_username, dockerhub_repo
+    )
     dataset_path = resolve_dataset_path(dataset)
 
     if not dataset_path.exists():
@@ -319,11 +338,18 @@ def convert_dataset(
         try:
             xcode_config = load_xcode_config(dataset_path)
             instances = [
-                {"repo_name": t.repo, "base_commit": t.base_commit, "instance_id": t.instance_id}
+                {
+                    "repo_name": t.repo,
+                    "base_commit": t.base_commit,
+                    "instance_id": t.instance_id,
+                }
                 for t in tasks
             ]
             warm_xcode_cache_for_instances(
-                instances, xcode_config, repo_root() / "repos", dataset_label=dataset_name
+                instances,
+                xcode_config,
+                repo_root() / "repos",
+                dataset_label=dataset_name,
             )
         except FileNotFoundError:
             typer.echo("  xcode_config.yaml not found — skipping cache warm.")
@@ -331,6 +357,10 @@ def convert_dataset(
             typer.echo(f"  Cache warming failed: {e}", err=True)
 
     typer.echo("\nNext steps:")
-    typer.echo(f"  1. Oracle eval:     anvil run-evals --dataset {ds_path} --agent oracle --compile-only")
+    typer.echo(
+        f"  1. Oracle eval:     anvil run-evals --dataset {ds_path} --agent oracle --compile-only"
+    )
     typer.echo(f"  2. Publish images:  anvil publish-images --dataset {ds_path}")
-    typer.echo(f"  3. Agent eval:      anvil run-evals --dataset {ds_path} --agent mini-swe-agent --model <model> --compile-only")
+    typer.echo(
+        f"  3. Agent eval:      anvil run-evals --dataset {ds_path} --agent mini-swe-agent --model <model> --compile-only"
+    )

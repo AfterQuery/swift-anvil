@@ -127,7 +127,9 @@ class TaskTestCopier:
             re.DOTALL,
         ):
             pos = m.start(1) + len(m.group(1))
-            pbx = pbx[:pos] + f"\n\t\t\t\t{file_ref_uuid} /* {file_name} */," + pbx[pos:]
+            pbx = (
+                pbx[:pos] + f"\n\t\t\t\t{file_ref_uuid} /* {file_name} */," + pbx[pos:]
+            )
 
         if (
             (
@@ -184,7 +186,9 @@ class TaskTestCopier:
         except OSError:
             return
 
-        pod_dirs = re.findall(r'PODS_CONFIGURATION_BUILD_DIR\}/([^\s"]+)', xcconfig_text)
+        pod_dirs = re.findall(
+            r'PODS_CONFIGURATION_BUILD_DIR\}/([^\s"]+)', xcconfig_text
+        )
         if not pod_dirs:
             return
 
@@ -197,7 +201,9 @@ class TaskTestCopier:
         except OSError:
             return
 
-        extra_paths = "".join(f'\n\t\t\t\t\t"$(BUILT_PRODUCTS_DIR)/{d}",' for d in pod_dirs)
+        extra_paths = "".join(
+            f'\n\t\t\t\t\t"$(BUILT_PRODUCTS_DIR)/{d}",' for d in pod_dirs
+        )
 
         target_match = re.search(
             rf"(/\* {re.escape(test_target)} \*/ = \{{.*?buildConfigurationList = )(\w{{24}})",
@@ -263,7 +269,9 @@ class TaskTestCopier:
         if not self.source_tasks_dir:
             return ""
 
-        tests_file = self.source_tasks_dir / self._task_name(instance_id) / TESTS_FILENAME
+        tests_file = (
+            self.source_tasks_dir / self._task_name(instance_id) / TESTS_FILENAME
+        )
 
         if not tests_file.is_file():
             return ""
@@ -272,15 +280,23 @@ class TaskTestCopier:
 
         if test_type == TEST_TYPE_UI:
             return self._copy_to_target(
-                instance_id, tests_file, worktree_dir,
-                XCODE_CONFIG_UI_TEST_TARGET, XCODE_CONFIG_UI_TEST_FILES_DEST,
-                inject_ui_test_target, TEST_TYPE_UI,
+                instance_id,
+                tests_file,
+                worktree_dir,
+                XCODE_CONFIG_UI_TEST_TARGET,
+                XCODE_CONFIG_UI_TEST_FILES_DEST,
+                inject_ui_test_target,
+                TEST_TYPE_UI,
             )
         elif test_type == TEST_TYPE_APP:
             return self._copy_to_target(
-                instance_id, tests_file, worktree_dir,
-                XCODE_CONFIG_APP_TEST_TARGET, XCODE_CONFIG_APP_TEST_FILES_DEST,
-                inject_app_test_target, TEST_TYPE_APP,
+                instance_id,
+                tests_file,
+                worktree_dir,
+                XCODE_CONFIG_APP_TEST_TARGET,
+                XCODE_CONFIG_APP_TEST_FILES_DEST,
+                inject_app_test_target,
+                TEST_TYPE_APP,
                 fallback_spm=True,
             )
         else:
@@ -298,11 +314,18 @@ class TaskTestCopier:
         if not uitests_file.is_file():
             return False
 
-        return self._copy_to_target(
-            instance_id, uitests_file, worktree_dir,
-            XCODE_CONFIG_UI_TEST_TARGET, XCODE_CONFIG_UI_TEST_FILES_DEST,
-            inject_ui_test_target, TEST_TYPE_UI,
-        ) == TEST_TYPE_UI
+        return (
+            self._copy_to_target(
+                instance_id,
+                uitests_file,
+                worktree_dir,
+                XCODE_CONFIG_UI_TEST_TARGET,
+                XCODE_CONFIG_UI_TEST_FILES_DEST,
+                inject_ui_test_target,
+                TEST_TYPE_UI,
+            )
+            == TEST_TYPE_UI
+        )
 
     @staticmethod
     def _detect_test_type(tests_file: Path, xcode_config: dict) -> str:
@@ -366,9 +389,15 @@ class TaskTestCopier:
 
         test_target = xcode_config.get(XCODE_CONFIG_TEST_TARGET, "")
         project_rel = xcode_config.get(XCODE_CONFIG_PROJECT, "")
-        if test_target and not xcode_config.get(XCODE_CONFIG_TEST_PACKAGE_PATH) and project_rel:
+        if (
+            test_target
+            and not xcode_config.get(XCODE_CONFIG_TEST_PACKAGE_PATH)
+            and project_rel
+        ):
             self._add_file_to_pbxproj(worktree_dir, project_rel, dst, test_target)
-            self._propagate_pods_framework_paths(worktree_dir, xcode_config, test_target)
+            self._propagate_pods_framework_paths(
+                worktree_dir, xcode_config, test_target
+            )
 
         return TEST_TYPE_SPM
 
@@ -389,7 +418,9 @@ class TaskTestCopier:
         if not target or not files_dest:
             if fallback_spm:
                 logger.warning(
-                    "%s/%s not configured — falling back to spm", target_key, files_dest_key
+                    "%s/%s not configured — falling back to spm",
+                    target_key,
+                    files_dest_key,
                 )
                 return self._copy_spm_tests(instance_id, tests_file, worktree_dir)
             logger.warning(
@@ -404,7 +435,9 @@ class TaskTestCopier:
 
         dst = dest_dir / tests_file.name
         shutil.copy2(str(tests_file), str(dst))
-        logger.info("Copied test file %s → %s (%s)", tests_file.name, dest_dir, test_type)
+        logger.info(
+            "Copied test file %s → %s (%s)", tests_file.name, dest_dir, test_type
+        )
 
         project_rel = self.xcode_config.get(XCODE_CONFIG_PROJECT, "")
         if project_rel:

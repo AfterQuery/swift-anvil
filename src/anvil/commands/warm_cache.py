@@ -53,7 +53,9 @@ def warm_xcode_cache_for_instances(
         ):
             continue
         shutil.rmtree(commit_dir)
-        typer.echo(f"  Deleted incomplete cache for {rc.repo_name}@{rc.base_commit[:8]}")
+        typer.echo(
+            f"  Deleted incomplete cache for {rc.repo_name}@{rc.base_commit[:8]}"
+        )
         pruned_repos.add(rc.repo_name)
 
     for repo_name in pruned_repos:
@@ -81,7 +83,9 @@ def warm_xcode_cache_for_instances(
 
     def _warm_one(rc: _RepoCommit) -> tuple[_RepoCommit, Exception | None]:
         try:
-            cache.warm(repos_root / rc.repo_name, rc.repo_name, rc.base_commit, xcode_config)
+            cache.warm(
+                repos_root / rc.repo_name, rc.repo_name, rc.base_commit, xcode_config
+            )
             return rc, None
         except Exception as e:
             return rc, e

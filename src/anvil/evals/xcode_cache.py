@@ -977,7 +977,7 @@ def _inject_test_target(
         "/* End PBXNativeTarget section */",
         f"\t\t{uid['target']} /* {test_target} */ = {{\n"
         f"\t\t\tisa = PBXNativeTarget;\n"
-        f"\t\t\tbuildConfigurationList = {uid['config_list']} /* Build configuration list for PBXNativeTarget \"{test_target}\" */;\n"
+        f'\t\t\tbuildConfigurationList = {uid["config_list"]} /* Build configuration list for PBXNativeTarget "{test_target}" */;\n'
         f"\t\t\tbuildPhases = (\n"
         f"\t\t\t\t{uid['sources_phase']} /* Sources */,\n"
         f"\t\t\t\t{uid['frameworks_phase']} /* Frameworks */,\n"
@@ -998,7 +998,7 @@ def _inject_test_target(
     # 7. Add to project targets list
     pbx = re.sub(
         rf"(targets = \([^)]*{re.escape(host_target_uuid)}[^)]*)\);",
-        rf'\1\t\t\t\t{uid["target"]} /* {test_target} */,\n\t\t\t);',
+        rf"\1\t\t\t\t{uid['target']} /* {test_target} */,\n\t\t\t);",
         pbx,
         count=1,
     )
@@ -1112,7 +1112,7 @@ def _inject_test_target(
     # 13. XCConfigurationList
     pbx = pbx.replace(
         "/* End XCConfigurationList section */",
-        f"\t\t{uid['config_list']} /* Build configuration list for PBXNativeTarget \"{test_target}\" */ = {{\n"
+        f'\t\t{uid["config_list"]} /* Build configuration list for PBXNativeTarget "{test_target}" */ = {{\n'
         f"\t\t\tisa = XCConfigurationList;\n"
         f"\t\t\tbuildConfigurations = (\n"
         f"\t\t\t\t{uid['config_debug']} /* Debug */,\n"
@@ -1133,10 +1133,10 @@ def _inject_test_target(
         f'            skipped = "NO">\n'
         f"            <BuildableReference\n"
         f'               BuildableIdentifier = "primary"\n'
-        f"               BlueprintIdentifier = \"{uid['target']}\"\n"
+        f'               BlueprintIdentifier = "{uid["target"]}"\n'
         f'               BuildableName = "{test_target}.xctest"\n'
         f'               BlueprintName = "{test_target}"\n'
-        f"               ReferencedContainer = \"container:{project_rel.split('/')[-1]}\">\n"
+        f'               ReferencedContainer = "container:{project_rel.split("/")[-1]}">\n'
         f"            </BuildableReference>\n"
         f"         </TestableReference>\n"
     )

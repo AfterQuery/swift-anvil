@@ -88,7 +88,11 @@ def prewarm_app_binary(xcode_config: dict, products_dir: Path) -> None:
             timeout=15,
         )
     except subprocess.TimeoutExpired:
-        logger.warning("Pre-warm timed out for %s on %s — continuing without prewarm", bundle_id, sim_udid)
+        logger.warning(
+            "Pre-warm timed out for %s on %s — continuing without prewarm",
+            bundle_id,
+            sim_udid,
+        )
 
 
 class SimulatorPool:

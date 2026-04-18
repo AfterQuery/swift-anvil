@@ -31,7 +31,11 @@ def parse_xcodebuild_output(stdout: str, stderr: str) -> dict:
     for match in test_case_pattern.finditer(combined):
         class_name = match.group(1)
         test_name = match.group(2)
-        status = TEST_STATUS_PASSED if match.group(3).lower() == XCODEBUILD_PASSED else TEST_STATUS_FAILED
+        status = (
+            TEST_STATUS_PASSED
+            if match.group(3).lower() == XCODEBUILD_PASSED
+            else TEST_STATUS_FAILED
+        )
         tests.append({"name": test_name, "class_name": class_name, "status": status})
 
     swift_testing_pattern = re.compile(
@@ -41,11 +45,15 @@ def parse_xcodebuild_output(stdout: str, stderr: str) -> dict:
     for match in swift_testing_pattern.finditer(combined):
         result = match.group(2).lower()
         if result in (XCODEBUILD_PASSED, XCODEBUILD_FAILED):
-            tests.append({
-                "name": match.group(1),
-                "class_name": "",
-                "status": TEST_STATUS_PASSED if result == XCODEBUILD_PASSED else TEST_STATUS_FAILED,
-            })
+            tests.append(
+                {
+                    "name": match.group(1),
+                    "class_name": "",
+                    "status": TEST_STATUS_PASSED
+                    if result == XCODEBUILD_PASSED
+                    else TEST_STATUS_FAILED,
+                }
+            )
 
     return {OUTPUT_KEY_TESTS: tests}
 
@@ -55,7 +63,11 @@ def parse_build_result(returncode: int, stdout: str, stderr: str) -> dict:
     combined = stdout + "\n" + stderr
 
     if returncode == 0:
-        return {OUTPUT_KEY_TESTS: [{"name": TEST_NAME_COMPILATION, "status": TEST_STATUS_PASSED}]}
+        return {
+            OUTPUT_KEY_TESTS: [
+                {"name": TEST_NAME_COMPILATION, "status": TEST_STATUS_PASSED}
+            ]
+        }
 
     error_lines = []
     for line in combined.splitlines():
@@ -64,7 +76,13 @@ def parse_build_result(returncode: int, stdout: str, stderr: str) -> dict:
 
     message = "\n".join(error_lines[:5]) if error_lines else "Build failed"
     return {
-        OUTPUT_KEY_TESTS: [{"name": TEST_NAME_COMPILATION, "status": TEST_STATUS_FAILED, "message": message}]
+        OUTPUT_KEY_TESTS: [
+            {
+                "name": TEST_NAME_COMPILATION,
+                "status": TEST_STATUS_FAILED,
+                "message": message,
+            }
+        ]
     }
 
 

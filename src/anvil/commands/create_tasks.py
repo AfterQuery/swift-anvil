@@ -278,8 +278,7 @@ def _update_repo_md(
     updated: str | None = None
     if use_llm:
         user_msg = (
-            f"Current repo.md:\n{existing}\n\n"
-            f"New tasks to add:\n{new_tasks_summary}"
+            f"Current repo.md:\n{existing}\n\nNew tasks to add:\n{new_tasks_summary}"
         )
         try:
             updated = call_llm(model, REPO_MD_UPDATE_SYSTEM, user_msg)
@@ -394,9 +393,7 @@ def create_tasks(
 
     created_tasks: list[dict] = []
     with ThreadPoolExecutor(max_workers=max_parallel) as pool:
-        futures = {
-            pool.submit(_run, i, url): i for i, url in enumerate(urls)
-        }
+        futures = {pool.submit(_run, i, url): i for i, url in enumerate(urls)}
         for future in as_completed(futures):
             result = future.result()
             rc |= result["rc"]

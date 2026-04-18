@@ -1,4 +1,8 @@
-from anvil.evals.xcode_parser import merge_test_results, parse_build_result, parse_xcodebuild_output
+from anvil.evals.xcode_parser import (
+    merge_test_results,
+    parse_build_result,
+    parse_xcodebuild_output,
+)
 from anvil.evals.constants import TEST_STATUS_FAILED, TEST_STATUS_PASSED
 
 

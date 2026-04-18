@@ -1,4 +1,4 @@
-.PHONY: setup test
+.PHONY: setup test format
 
 setup:
 	uv venv
@@ -11,3 +11,7 @@ setup:
 test:
 	uv sync --group dev
 	uv run pytest tests/ -v
+
+format:
+	uv sync --group dev
+	uv run ruff format .

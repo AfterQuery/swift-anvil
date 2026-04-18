@@ -38,7 +38,11 @@ def save_eval_output(
 
 def failed_test_result(name: str, message: str) -> dict:
     """Return a synthetic FAILED test result dict."""
-    return {OUTPUT_KEY_TESTS: [{"name": name, "status": TEST_STATUS_FAILED, "message": message}]}
+    return {
+        OUTPUT_KEY_TESTS: [
+            {"name": name, "status": TEST_STATUS_FAILED, "message": message}
+        ]
+    }
 
 
 def make_empty_patch_result(has_tests: bool) -> dict:

@@ -429,6 +429,7 @@ async def run_agents_batch(
 
     try:
         from dotenv import load_dotenv
+
         load_dotenv(Path(__file__).resolve().parents[3] / ".env")
     except ImportError:
         pass

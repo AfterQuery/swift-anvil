@@ -65,7 +65,7 @@ def _generate_xcode_config(repo_name: str, repo_tree: str) -> str | None:
     """Use LLM to generate xcode_config.yaml from the repo structure."""
     if not llm_available():
         return None
-    user_msg = f"Repository name: {repo_name}\n\n" f"Directory listing:\n{repo_tree}"
+    user_msg = f"Repository name: {repo_name}\n\nDirectory listing:\n{repo_tree}"
     return call_llm(DEFAULT_MODEL, XCODE_CONFIG_SYSTEM, user_msg)
 
 
