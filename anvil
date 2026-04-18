@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Wrapper so users can run ./anvil <args> without activating the venv
+exec uv run anvil "$@"

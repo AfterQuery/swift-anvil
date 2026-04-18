@@ -187,27 +187,38 @@ evaluation harness.
 Output ONLY valid YAML (no markdown fences, no explanation). Use this format:
 
 ```
-project: <RepoName>/<RepoName>.xcodeproj
+project: <path/to/Project.xcodeproj>
 scheme: <SchemeName>
 
 test_package_path:
-  - <RepoName>/Packages/<PackageName>
+  - <path/to/PackageDir>
 test_files_dest: Tests/<TestTargetName>
 test_scheme: <PackageScheme>
 test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
 
 # app_test_scheme: <SchemeName>
-# app_test_target: <RepoName>Tests
-# app_test_files_dest: <RepoName>/<RepoName>Tests
+# app_test_target: <TargetName>Tests
+# app_test_files_dest: <path/to/TestsDir>
 # app_test_module: <ModuleName>
 
-# ui_test_target: <RepoName>UITests
-# ui_test_files_dest: <RepoName>/<RepoName>UITests
+# ui_test_target: <TargetName>UITests
+# ui_test_files_dest: <path/to/UITestsDir>
 
 # build_timeout: 600
 ```
 
 Rules:
+
+## Paths
+- All paths are relative to the repo root. Use paths EXACTLY as they appear in \
+the directory listing. Do NOT add a repo-name prefix if the files are at the \
+top level. For example, if the listing shows "Mastodon.xcodeproj/...", use \
+"Mastodon.xcodeproj", NOT "mastodon-ios/Mastodon.xcodeproj". Only include a \
+subdirectory prefix if the .xcodeproj actually lives inside one (e.g., \
+"ACHNBrowserUI/ACHNBrowserUI.xcodeproj" when the listing shows it under \
+"ACHNBrowserUI/").
+
+## Project detection
 - Look for .xcodeproj or .xcworkspace files to determine the project path.
 - Look for scheme names from .xcodeproj/xcshareddata/xcschemes/ or the top-level \
 directory structure.
@@ -219,9 +230,35 @@ use # prefix.
 - test_destination should always be \
 "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest" unless the project is \
 macOS-only.
+
+## CocoaPods / workspace detection
+- If the repo has a Podfile, the project uses CocoaPods. Add BOTH workspace and \
+project keys so the harness uses the workspace when it exists (after pod install) \
+and falls back to the project for commits that migrated away from CocoaPods:
+    workspace: <Name>.xcworkspace
+    project: <Name>.xcodeproj
+- Add a pre_build_commands entry to run pod install:
+    - "if [ -f Podfile ]; then pod install --no-repo-update; fi"
+
+## Generated / gitignored dependencies (pre_build_commands)
+- Check for code generation tools that produce gitignored dependencies. Common \
+patterns:
+  - Arkana (.arkana.yml): generates a local SPM package for secrets management. \
+The generated package is typically gitignored but referenced as a local SPM \
+dependency. Add a pre_build_commands entry to create a stub package with the \
+expected module and types. Check the .arkana.yml for the package name, namespace, \
+and result_path, then check the source code to see which types/properties are used.
+  - SwiftGen (swiftgen.yml): generates Swift code from assets/strings. If the \
+generated files are gitignored, add a pre_build_commands entry to create stubs.
+  - Sourcery (.sourcery.yml): generates Swift code from templates. Same approach.
+- pre_build_commands is a list of shell commands run in the worktree before \
+xcodebuild. Use YAML literal block style (|) for multi-line commands with \
+heredocs. Each command runs via `sh -c`.
+
+## Output
 - Output ONLY the raw YAML content, no markdown fences.
 
-Here is an example for the ACHNBrowserUI repo:
+Example 1 — repo with nested .xcodeproj, no extra dependencies (ACHNBrowserUI):
 
 ```yaml
 project: ACHNBrowserUI/ACHNBrowserUI.xcodeproj
@@ -241,6 +278,47 @@ app_test_module: AC_Helper
 ui_test_target: ACHNBrowserUIUITests
 ui_test_files_dest: ACHNBrowserUI/ACHNBrowserUIUITests
 app_bundle_name: "AC Helper"
+
+build_timeout: 1800
+```
+
+Example 2 — repo with CocoaPods, Arkana, and root-level .xcodeproj (mastodon-ios):
+
+```yaml
+workspace: Mastodon.xcworkspace
+project: Mastodon.xcodeproj
+scheme: Mastodon
+
+pre_build_commands:
+  - |
+    mkdir -p dependencies/ArkanaKeys/Sources/ArkanaKeys
+    cat > dependencies/ArkanaKeys/Package.swift << 'EOF'
+    // swift-tools-version: 5.7
+    import PackageDescription
+    let package = Package(name: "ArkanaKeys", products: [.library(name: "ArkanaKeys", targets: ["ArkanaKeys"])], targets: [.target(name: "ArkanaKeys", path: "Sources/ArkanaKeys")])
+    EOF
+    cat > dependencies/ArkanaKeys/Sources/ArkanaKeys/Keys.swift << 'EOF'
+    import Foundation
+    public enum Keys {
+        public struct Debug { public init() {}; public let notificationEndpoint: String = "" }
+        public struct Release { public init() {}; public let notificationEndpoint: String = "" }
+    }
+    EOF
+  - "if [ -f Podfile ]; then pod install --no-repo-update; fi"
+
+test_package_path:
+  - MastodonSDK
+test_files_dest: Tests/MastodonSDKTests
+test_scheme: MastodonSDK
+test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
+
+app_test_scheme: Mastodon
+app_test_target: MastodonTests
+app_test_files_dest: MastodonTests
+app_test_module: Mastodon
+
+ui_test_target: MastodonUITests
+ui_test_files_dest: MastodonUITests
 
 build_timeout: 1800
 ```

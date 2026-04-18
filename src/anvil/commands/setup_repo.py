@@ -15,14 +15,24 @@ XCODE_CONFIG_PLACEHOLDER = """\
 # Xcode build configuration for {repo_name}
 # Used by: anvil warm-xcode-cache --dataset datasets/{repo_name}
 #           anvil run-evals --eval-backend xcode --dataset datasets/{repo_name}
+#
+# IMPORTANT: All paths are relative to the repo root (the git worktree root).
+# Do NOT add a repo-name prefix unless the .xcodeproj actually lives in a
+# subdirectory. Check the repo structure to determine the correct paths.
 
-# project: {repo_name}/{repo_name}.xcodeproj
+# If the repo uses CocoaPods, set both workspace and project:
+# workspace: {repo_name}.xcworkspace
+# project: {repo_name}.xcodeproj
 # scheme: {repo_name}
+
+# Shell commands to run before xcodebuild (e.g. generate stubs, pod install):
+# pre_build_commands:
+#   - "if [ -f Podfile ]; then pod install --no-repo-update; fi"
 
 # Per-task unit tests.
 # Each task can have a single tests.swift file at tasks/{repo_name}/task-N/tests.swift.
 # test_package_path:
-#   - {repo_name}/Packages/Backend
+#   - Packages/Backend
 # test_files_dest: Tests/BackendTests
 # test_scheme: Backend
 # test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
@@ -30,12 +40,12 @@ XCODE_CONFIG_PLACEHOLDER = """\
 # App-level unit tests
 # app_test_scheme: {repo_name}
 # app_test_target: {repo_name}Tests
-# app_test_files_dest: {repo_name}/{repo_name}Tests
+# app_test_files_dest: {repo_name}Tests
 # app_test_module: {repo_name}
 
 # UI tests
 # ui_test_target: {repo_name}UITests
-# ui_test_files_dest: {repo_name}/{repo_name}UITests
+# ui_test_files_dest: {repo_name}UITests
 
 # build_timeout: 600
 """

@@ -172,6 +172,35 @@ def resolve_test_package_path(xcode_config: dict, work_dir: Path) -> str:
     return ""
 
 
+def resolve_repo_relative_path(
+    config_path: str, work_dir: Path
+) -> tuple[str, Path | None]:
+    """Resolve a repo-relative config path under a worktree."""
+    rel = (config_path or "").strip()
+    if not rel:
+        return "", None
+
+    rel_path = Path(rel)
+    direct = work_dir / rel_path
+    if direct.exists():
+        return rel, direct
+
+    parts = rel_path.parts
+    if len(parts) > 1:
+        stripped_rel = Path(*parts[1:]).as_posix()
+        stripped = work_dir / stripped_rel
+        if stripped.exists():
+            logger.warning(
+                "Configured path '%s' not found in %s; using '%s'",
+                rel,
+                work_dir,
+                stripped_rel,
+            )
+            return stripped_rel, stripped
+
+    return rel, direct
+
+
 class XcodeBuildCache:
     """Manages pre-built DerivedData caches per (repo, base_commit) pair."""
 
@@ -375,7 +404,10 @@ class XcodeBuildCache:
     @staticmethod
     def _package_resolved_path(xcode_config: dict, work_dir: Path) -> Path | None:
         """Return the project-level Package.resolved path, or None."""
-        project_rel = xcode_config.get(XCODE_CONFIG_PROJECT, "")
+        project_rel, _ = resolve_repo_relative_path(
+            xcode_config.get(XCODE_CONFIG_PROJECT, ""),
+            work_dir,
+        )
         if not project_rel:
             return None
         return (
@@ -676,11 +708,14 @@ def _as_build_for_testing(cmd: list[str]) -> list[str]:
 
 def _resolve_project_args(xcode_config: dict, work_dir: Path) -> list[str]:
     """Resolve -workspace/-project args, preferring workspace when it exists."""
-    workspace = xcode_config.get("workspace", "")
-    project = xcode_config.get(XCODE_CONFIG_PROJECT, "")
-
-    workspace_path = work_dir / workspace if workspace else None
-    project_path = work_dir / project if project else None
+    workspace, workspace_path = resolve_repo_relative_path(
+        xcode_config.get("workspace", ""),
+        work_dir,
+    )
+    project, project_path = resolve_repo_relative_path(
+        xcode_config.get(XCODE_CONFIG_PROJECT, ""),
+        work_dir,
+    )
 
     if workspace_path and workspace_path.exists():
         return ["-workspace", str(workspace_path)]
@@ -824,6 +859,7 @@ def _inject_test_target(
     if not test_target or not files_dest or not project_rel:
         return False
 
+    project_rel, _ = resolve_repo_relative_path(project_rel, work_dir)
     pbxproj_path = work_dir / project_rel / PROJECT_PBXPROJ
     if not pbxproj_path.exists():
         logger.warning("project.pbxproj not found at %s", pbxproj_path)

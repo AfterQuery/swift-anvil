@@ -39,6 +39,7 @@ from .xcode_cache import (
     _pbx_uuid,
     inject_app_test_target,
     inject_ui_test_target,
+    resolve_repo_relative_path,
     resolve_test_package_path,
 )
 
@@ -56,6 +57,7 @@ class TaskTestCopier:
     @staticmethod
     def validate_pbxproj(worktree_dir: Path, project_rel: str) -> str | None:
         """Validate project.pbxproj. Returns error string or None if valid."""
+        project_rel, _ = resolve_repo_relative_path(project_rel, worktree_dir)
         pbxproj_path = worktree_dir / project_rel / PROJECT_PBXPROJ
         if not pbxproj_path.exists():
             return None
@@ -92,6 +94,7 @@ class TaskTestCopier:
         target_name: str,
     ) -> None:
         """Add Swift file to pbxproj target's Sources. No-op if already present."""
+        project_rel, _ = resolve_repo_relative_path(project_rel, worktree_dir)
         pbxproj_path = worktree_dir / project_rel / PROJECT_PBXPROJ
         if not pbxproj_path.exists():
             return
@@ -170,6 +173,7 @@ class TaskTestCopier:
         project_rel = xcode_config.get(XCODE_CONFIG_PROJECT, "")
         if not scheme or not project_rel:
             return
+        project_rel, _ = resolve_repo_relative_path(project_rel, worktree_dir)
 
         pods_xcconfig = (
             worktree_dir
