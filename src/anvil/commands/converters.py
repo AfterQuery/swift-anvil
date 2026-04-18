@@ -1,4 +1,4 @@
-"""Converters for Anvil evaluation format.
+"""CLI command to convert task directories to Anvil evaluation format.
 
 Converts task directories to Anvil's evaluation format which includes:
 - instances.yaml - List of instances for run-evals
@@ -26,7 +26,7 @@ import yaml
 from ..config import repo_root
 from ..evals.xcode_cache import load_xcode_config
 from ..util import resolve_dataset_path, resolve_registry_env
-from ..warm_cache import warm_xcode_cache_for_instances
+from .warm_cache import warm_xcode_cache_for_instances
 
 
 @dataclass

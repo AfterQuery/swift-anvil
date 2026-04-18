@@ -11,8 +11,8 @@ from typing import NamedTuple
 import typer
 from ruamel.yaml import YAML
 
-from .config import source_tasks_dir, tasks_dir, repo_root
-from .evals.xcode_cache import XcodeBuildCache, load_xcode_config
+from ..config import source_tasks_dir, tasks_dir, repo_root
+from ..evals.xcode_cache import XcodeBuildCache, load_xcode_config
 
 
 class _RepoCommit(NamedTuple):

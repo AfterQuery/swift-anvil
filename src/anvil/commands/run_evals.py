@@ -1,4 +1,4 @@
-"""Run evaluations on a dataset."""
+"""CLI command to run evaluations on a dataset."""
 
 from __future__ import annotations
 

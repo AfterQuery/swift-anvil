@@ -21,4 +21,4 @@ datasets
 tasks/firefox-ios
 tasks/iOS-Open-GPX-Tracker
 tasks/mastodon-ios
-src/anvil/wizard/github_prs/mastodon-ios.txt
+src/anvil/commands/github_prs/mastodon-ios.txt

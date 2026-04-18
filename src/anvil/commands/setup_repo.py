@@ -8,9 +8,9 @@ from pathlib import Path
 
 import typer
 
-from .wizard.task_creator import _call_llm, _llm_available
-from .wizard.constants import DEFAULT_MODEL
-from .wizard.prompts import XCODE_CONFIG_SYSTEM
+from .create_tasks import _call_llm, _llm_available
+from .constants import DEFAULT_MODEL
+from .prompts import XCODE_CONFIG_SYSTEM
 
 XCODE_CONFIG_PLACEHOLDER = """\
 # Xcode build configuration for {repo_name}
@@ -149,7 +149,7 @@ source .venv/bin/activate
 
 0. Create task directories from GitHub PRs (skip if task dirs already exist)
 
-Add PR URLs (one per line) to `src/anvil/wizard/github_prs/{repo_name}.txt`, then run:
+Add PR URLs (one per line) to `src/anvil/commands/github_prs/{repo_name}.txt`, then run:
 
 ```bash
 anvil create-tasks {repo_name}
@@ -207,6 +207,6 @@ anvil run-evals --dataset datasets/{repo_name} --agent mini-swe-agent --model op
     typer.echo(f"\n✓ Repository cloned to: {repos_path}")
     typer.echo(f"✓ Task structure created at: {task_path}")
     typer.echo("\nNext steps:")
-    typer.echo(f"  1. Add PR URLs to src/anvil/wizard/github_prs/{repo_name}.txt")
+    typer.echo(f"  1. Add PR URLs to src/anvil/commands/github_prs/{repo_name}.txt")
     typer.echo(f"  2. Run: anvil create-tasks {repo_name}")
     typer.echo(f"  3. Review {task_path}/xcode_config.yaml")

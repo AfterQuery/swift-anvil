@@ -53,7 +53,7 @@ This clones the repo into `repos/` and creates `tasks/<repo_name>/` with templat
 
 2. Create tasks from GitHub PRs
 
-Add PR URLs (one per line) to `src/anvil/wizard/github_prs/<repo_name>.txt`, then:
+Add PR URLs (one per line) to `src/anvil/commands/github_prs/<repo_name>.txt`, then:
 
 ```bash
 anvil create-tasks <repo_name>

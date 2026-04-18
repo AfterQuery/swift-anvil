@@ -1,4 +1,4 @@
-"""Publish dataset images to Docker Hub."""
+"""CLI command to publish dataset images to Docker Hub."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 import typer
 from ruamel.yaml import YAML
 
-from .util import resolve_registry_env
+from ..util import resolve_registry_env
 
 _RETRYABLE_PUSH_ERRORS = ("broken pipe", "connection reset", "timeout", "EOF", "TLS handshake")
 

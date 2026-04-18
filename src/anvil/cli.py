@@ -6,12 +6,14 @@ import typer
 
 from . import __version__
 from .config import load_repo_env
-from .publish import publish_images
-from .run_evals import run_evals
-from .setup_repo import setup_repo
-from .warm_cache import warm_xcode_cache
-from .wizard.converters import convert_dataset
-from .wizard.task_creator import create_tasks
+from .commands import (
+    convert_dataset,
+    create_tasks,
+    publish_images,
+    run_evals,
+    setup_repo,
+    warm_xcode_cache,
+)
 
 load_repo_env()
 

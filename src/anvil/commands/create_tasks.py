@@ -1,4 +1,4 @@
-"""Create task directories from GitHub PR URLs.
+"""CLI command to create task directories from GitHub PR URLs.
 
 Given a single PR URL or a text file with one PR URL per line, generates
 the full task directory structure under ``tasks/<repo_name>/``::
@@ -286,7 +286,7 @@ def _resolve_input(url_or_file: str) -> tuple[list[str], str | None]:
     """Return *(urls, repo_name_hint)*.
 
     Accepts a GitHub PR URL, a path to a text file, or a bare repo name
-    that maps to ``wizard/github_prs/<name>.txt``.
+    that maps to ``commands/github_prs/<name>.txt``.
     """
     # 1. Explicit file path
     path = Path(url_or_file)

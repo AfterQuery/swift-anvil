@@ -70,7 +70,7 @@ source .venv/bin/activate
 
 0. Create task directories from GitHub PRs (skip if task dirs already exist)
 
-Add PR URLs (one per line) to `src/anvil/wizard/github_prs/ACHNBrowserUI.txt`, then run:
+Add PR URLs (one per line) to `src/anvil/commands/github_prs/ACHNBrowserUI.txt`, then run:
 
 ```bash
 anvil create-tasks ACHNBrowserUI
