@@ -77,7 +77,7 @@ def run_evals(
     ] = None,
 ) -> None:
     """Run evaluation with an agent on a dataset."""
-    from .evals import run_evaluation
+    from ..evals import run_evaluation
 
     rc = run_evaluation(
         model=model,

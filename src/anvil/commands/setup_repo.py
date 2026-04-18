@@ -8,8 +8,7 @@ from pathlib import Path
 
 import typer
 
-from .create_tasks import _call_llm, _llm_available
-from .constants import DEFAULT_MODEL
+from .llm import DEFAULT_MODEL, call_llm, llm_available
 from .prompts import XCODE_CONFIG_SYSTEM
 
 XCODE_CONFIG_PLACEHOLDER = """\
@@ -64,10 +63,10 @@ def _get_repo_tree(repos_path: Path, max_depth: int = 3) -> str:
 
 def _generate_xcode_config(repo_name: str, repo_tree: str) -> str | None:
     """Use LLM to generate xcode_config.yaml from the repo structure."""
-    if not _llm_available():
+    if not llm_available():
         return None
     user_msg = f"Repository name: {repo_name}\n\n" f"Directory listing:\n{repo_tree}"
-    return _call_llm(DEFAULT_MODEL, XCODE_CONFIG_SYSTEM, user_msg)
+    return call_llm(DEFAULT_MODEL, XCODE_CONFIG_SYSTEM, user_msg)
 
 
 def setup_repo(
@@ -196,7 +195,7 @@ anvil run-evals --dataset datasets/{repo_name} --agent mini-swe-agent --model op
         )
     if not xcode_config:
         xcode_config = XCODE_CONFIG_PLACEHOLDER.format(repo_name=repo_name)
-        if _llm_available():
+        if llm_available():
             typer.secho(
                 "Falling back to placeholder xcode_config.yaml.",
                 fg=typer.colors.YELLOW,
