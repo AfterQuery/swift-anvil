@@ -49,15 +49,25 @@ Go to [hub.docker.com](https://hub.docker.com) and create a new **private** repo
 anvil setup-repo <github_url>
 ```
 
-This clones the repo into `repos/` and creates `tasks/<repo_name>/` with template `repo.md`, `metadata.yaml`, and `xcode_config.yaml`. Fill those in before proceeding.
+This clones the repo into `repos/` and creates `tasks/<repo_name>/` with template `repo.md` and `xcode_config.yaml`. Fill those in before proceeding.
 
-2. Convert the dataset (also warms the Xcode build cache)
+2. Create tasks from GitHub PRs
+
+Add PR URLs (one per line) to `src/anvil/wizard/github_prs/<repo_name>.txt`, then:
+
+```bash
+anvil create-tasks <repo_name>
+```
+
+This fetches each PR, downloads the diff, and uses an LLM to generate `task.md`, `tests.swift`, and `uitests.swift` for each task. Also accepts a single PR URL or a path to a text file. Use `--model` to change the LLM (default: `openrouter/anthropic/claude-sonnet-4.6`).
+
+3. Convert the dataset (also warms the Xcode build cache)
 
 ```bash
 anvil convert-dataset --dataset tasks/<repo_name>
 ```
 
-3. Verify gold patches compile and pass unit tests
+4. Verify gold patches compile and pass unit tests
 
 ```bash
 anvil run-evals --dataset datasets/<repo_name> --agent oracle
@@ -65,7 +75,7 @@ anvil run-evals --dataset datasets/<repo_name> --agent oracle
 
 The oracle agent applies gold patches from `gold_patches.json` directly — all tests should pass if your harness is correct. Each dataset needs a `xcode_config.yaml` in `tasks/<repo_name>/` specifying the Xcode project, scheme, and build destination.
 
-4. Publish Docker images (required for LLM agent runs via Modal)
+5. Publish Docker images (required for LLM agent runs via Modal)
 
 ```bash
 anvil publish-images --dataset datasets/<repo_name>
@@ -73,7 +83,7 @@ anvil publish-images --dataset datasets/<repo_name>
 
 The username and repo are read from `REGISTRY_USERNAME` and `REGISTRY_REPO` in `.env` (or pass `-u <username>` / `--repo <name>` to override).
 
-5. Run evaluations
+6. Run evaluations
 
 ```bash
 anvil run-evals \

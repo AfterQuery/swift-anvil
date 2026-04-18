@@ -6,70 +6,60 @@ Animal Crossing Helper: https://github.com/Dimillian/ACHNBrowserUI
 
 - Type: Feature
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/263.diff -o solution.diff
-- Patch Commit: 154e105
 - Base Commit: 3eba9512b0fb430d2507e27df3f8311d3bd67706
 
 2. Adjust Grid View: https://github.com/Dimillian/ACHNBrowserUI/pull/191
 
 - Type: Fix
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/191.diff -o solution.diff
-- Patch Commit: c05456f
 - Base Commit: 31b3185f7435e9f1c208ad7c0c726a54652ca791
 
 3. Add Partial Like: https://github.com/Dimillian/ACHNBrowserUI/pull/338
 
 - Type: Feature
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/338.diff -o solution.diff
-- Patch Commit: c452f40
 - Base Commit: 3d11674846dd9ad905de616782134b0a76a4e148
 
 4. Add Sorting Villagers: https://github.com/Dimillian/ACHNBrowserUI/pull/190
 
 - Type: Feature
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/190.diff -o solution.diff
-- Patch Commit: 0bfd982
 - Base Commit: 89ac53bfe6d0769411f4005060e8974fa8fd35d4
 
 5. Add Custom Chores and To-Dos: https://github.com/Dimillian/ACHNBrowserUI/pull/210
 
 - Type: Feature
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/210.diff -o solution.diff
-- Patch Commit: fae875a
 - Base Commit: 848a1589eb08f89f6badfde10d3b10ea592157a5
 
 6. ACHN Dashboard: https://github.com/Dimillian/ACHNBrowserUI/pull/22
 
 - Type: Feature
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/22.diff -o solution.diff
-- Patch Commit: 64a3eee
 - Base Commit: 80994d6ffa112b654312aa4922897de92e986ba3
 
 7. Turnip Exchange Listing: https://github.com/Dimillian/ACHNBrowserUI/pull/15
 
 - Type: Feature
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/15.diff -o solution.diff
-- Patch Commit: 7114243
 - Base Commit: 87dace0a0d0a120fd81d651e36bd45c4cc95470b
 
 8. Turnip Prices Min Max Average: https://github.com/Dimillian/ACHNBrowserUI/pull/175
 
 - Type: Feature
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/175.diff -o solution.diff
-- Patch Commit: 4af12fb
 - Base Commit: ceba2fddea5304b2b248e5de72568d3afdfbb97a
 
 9. Today Villager Visits: https://github.com/Dimillian/ACHNBrowserUI/pull/240
 
 - Type: Feature
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/240.diff -o solution.diff
-- Patch Commit: 63f81c5
 - Base Commit: d01e4353bd393e5fefcdac8910d9adc1d9ce7892
 
 10. Add Creator / Custom Design Items: https://github.com/Dimillian/ACHNBrowserUI/pull/189
 
 - Type: Feature
 - Patch: curl -L https://github.com/Dimillian/ACHNBrowserUI/pull/189.diff -o solution.diff
-- Patch Commit: 9d33500
 - Base Commit: e4c80e95cc9ac5a0870c7e749d1c7c9b219bb360
 
 ## Commands
@@ -78,7 +68,15 @@ Animal Crossing Helper: https://github.com/Dimillian/ACHNBrowserUI
 source .venv/bin/activate
 ```
 
-1. Write tasks and convert dataset
+0. Create task directories from GitHub PRs (skip if task dirs already exist)
+
+Add PR URLs (one per line) to `src/anvil/wizard/github_prs/ACHNBrowserUI.txt`, then run:
+
+```bash
+anvil create-tasks ACHNBrowserUI
+```
+
+1. Convert dataset
 
 ```bash
 anvil convert-dataset --dataset tasks/ACHNBrowserUI

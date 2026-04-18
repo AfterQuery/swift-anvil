@@ -16,6 +16,7 @@ import json
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
@@ -26,7 +27,18 @@ from ..config import repo_root
 from ..evals.xcode_cache import load_xcode_config
 from ..util import resolve_dataset_path, resolve_registry_env
 from ..warm_cache import warm_xcode_cache_for_instances
-from .models import Task
+
+
+@dataclass
+class Task:
+    """A single evaluation task."""
+
+    instance_id: str
+    problem_statement: str
+    patch: str
+    base_commit: str
+    repo: str
+    before_repo_set_cmd: str = ""
 
 
 def _load_xcode_task(task_dir: Path, repo_name: str, base_commit: str) -> Task | None:

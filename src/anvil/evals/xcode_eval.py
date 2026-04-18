@@ -64,7 +64,7 @@ from .eval_output import (
     save_eval_output,
 )
 from .simulator_pool import SimulatorPool, prewarm_app_binary
-from .test_file_copier import TaskTestCopier
+from .task_test_copier import TaskTestCopier
 
 logger = logging.getLogger(__name__)
 

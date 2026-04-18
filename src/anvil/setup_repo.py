@@ -8,10 +8,75 @@ from pathlib import Path
 
 import typer
 
+from .wizard.task_creator import _call_llm, _llm_available
+from .wizard.constants import DEFAULT_MODEL
+from .wizard.prompts import XCODE_CONFIG_SYSTEM
+
+XCODE_CONFIG_PLACEHOLDER = """\
+# Xcode build configuration for {repo_name}
+# Used by: anvil warm-xcode-cache --dataset datasets/{repo_name}
+#           anvil run-evals --eval-backend xcode --dataset datasets/{repo_name}
+
+# project: {repo_name}/{repo_name}.xcodeproj
+# scheme: {repo_name}
+
+# Per-task unit tests.
+# Each task can have a single tests.swift file at tasks/{repo_name}/task-N/tests.swift.
+# test_package_path:
+#   - {repo_name}/Packages/Backend
+# test_files_dest: Tests/BackendTests
+# test_scheme: Backend
+# test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
+
+# App-level unit tests
+# app_test_scheme: {repo_name}
+# app_test_target: {repo_name}Tests
+# app_test_files_dest: {repo_name}/{repo_name}Tests
+# app_test_module: {repo_name}
+
+# UI tests
+# ui_test_target: {repo_name}UITests
+# ui_test_files_dest: {repo_name}/{repo_name}UITests
+
+# build_timeout: 600
+"""
+
+
+def _get_repo_tree(repos_path: Path, max_depth: int = 3) -> str:
+    """Get a directory listing of the cloned repo for the LLM."""
+    result = subprocess.run(
+        ["find", str(repos_path), "-maxdepth", str(max_depth), "-type", "f"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        return ""
+    # Make paths relative to repos_path
+    prefix = str(repos_path) + "/"
+    lines = [
+        line.removeprefix(prefix)
+        for line in result.stdout.strip().splitlines()
+        if not line.endswith(".DS_Store")
+    ]
+    return "\n".join(sorted(lines)[:500])
+
+
+def _generate_xcode_config(repo_name: str, repo_tree: str) -> str | None:
+    """Use LLM to generate xcode_config.yaml from the repo structure."""
+    if not _llm_available():
+        return None
+    user_msg = f"Repository name: {repo_name}\n\n" f"Directory listing:\n{repo_tree}"
+    return _call_llm(DEFAULT_MODEL, XCODE_CONFIG_SYSTEM, user_msg)
+
 
 def setup_repo(
-    repo_url: str = typer.Argument(..., help="GitHub repository URL (e.g., https://github.com/user/repo)"),
-    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing directories without prompting"),
+    repo_url: str = typer.Argument(
+        ..., help="GitHub repository URL (e.g., https://github.com/user/repo)"
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Overwrite existing directories without prompting"
+    ),
 ) -> None:
     """Clone a repository and scaffold the task directory structure under tasks/."""
     repo_name = repo_url.rstrip("/").split("/")[-1]
@@ -62,7 +127,8 @@ def setup_repo(
     typer.echo(f"Creating task structure in {task_path}...")
     task_path.mkdir(parents=True, exist_ok=True)
 
-    (task_path / "repo.md").write_text(f"""\
+    (task_path / "repo.md").write_text(
+        f"""\
 # {repo_name}
 
 Repository: {repo_url}
@@ -73,7 +139,6 @@ Repository: {repo_url}
 
 - Type: Feature
 - Patch: curl -L [pr-link].diff -o solution.diff
-- Patch Commit: [commit-hash]
 - Base Commit: [base-commit-hash]
 
 ## Commands
@@ -82,10 +147,12 @@ Repository: {repo_url}
 source .venv/bin/activate
 ```
 
-0. Clone source repo
+0. Create task directories from GitHub PRs (skip if task dirs already exist)
+
+Add PR URLs (one per line) to `src/anvil/wizard/github_prs/{repo_name}.txt`, then run:
 
 ```bash
-git clone {repo_url} repos/{repo_name}
+anvil create-tasks {repo_name}
 ```
 
 1. Write tasks and convert dataset
@@ -111,103 +178,35 @@ anvil publish-images --dataset datasets/{repo_name}
 ```bash
 anvil run-evals --dataset datasets/{repo_name} --agent mini-swe-agent --model openrouter/anthropic/claude-opus-4.6 --n-attempts 4 --no-continue
 ```
-""")
+"""
+    )
 
-    (task_path / "metadata.yaml").write_text("""\
-base_commits:
-  task-1: [base-commit-hash]
-""")
-
-    (task_path / "xcode_config.yaml").write_text(f"""\
-# Xcode build configuration for {repo_name}
-# Used by: anvil warm-xcode-cache --dataset datasets/{repo_name}
-#           anvil run-evals --eval-backend xcode --dataset datasets/{repo_name}
-
-# project: {repo_name}/{repo_name}.xcodeproj
-# scheme: {repo_name}
-
-# Per-task unit tests.
-# Each task can have a single tests.swift file at tasks/{repo_name}/task-N/tests.swift.
-# test_package_path:
-#   - {repo_name}/Packages/Backend
-# test_files_dest: Tests/BackendTests
-# test_scheme: Backend
-# test_destination: "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest"
-
-# App-level unit tests
-# app_test_scheme: {repo_name}
-# app_test_target: {repo_name}Tests
-# app_test_files_dest: {repo_name}/{repo_name}Tests
-# app_test_module: {repo_name}
-
-# UI tests
-# ui_test_target: {repo_name}UITests
-# ui_test_files_dest: {repo_name}/{repo_name}UITests
-
-# build_timeout: 600
-""")
-
-    task1_path = task_path / "task-1"
-    task1_path.mkdir()
-
-    (task1_path / "task.md").write_text("""\
-## Feature: [Task Title]
-
-### Problem Description
-
-[Describe the problem the user faces and why it matters.]
-
-### Acceptance Criteria
-
-1. [Criterion 1]
-2. [Criterion 2]
-
-### Required API Surface
-
-The implementation must expose these names (tests depend on them to compile):
-
-- `[TypeName.methodName()]`
-""")
-
-    (task1_path / "tests.swift").write_text(f"""\
-import XCTest
-@testable import {repo_name}
-
-final class AnvilTask1Tests: XCTestCase {{
-
-    func testPlaceholder() throws {{
-        // TODO: implement tests
-        XCTFail("Not implemented")
-    }}
-
-}}
-""")
-
-    (task1_path / "uitests.swift").write_text("""\
-import XCTest
-
-final class AnvilTask1UITests: XCTestCase {
-
-    var app: XCUIApplication!
-
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launch()
-    }
-
-    func testPlaceholder() throws {
-        // TODO: implement UI tests
-        XCTFail("Not implemented")
-    }
-
-}
-""")
+    # Generate xcode_config.yaml via LLM, fall back to placeholder
+    typer.echo("Generating xcode_config.yaml...")
+    xcode_config: str | None = None
+    try:
+        repo_tree = _get_repo_tree(repos_path)
+        if repo_tree:
+            xcode_config = _generate_xcode_config(repo_name, repo_tree)
+    except Exception as e:
+        typer.secho(
+            f"Warning: LLM xcode_config generation failed: {e}",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+    if not xcode_config:
+        xcode_config = XCODE_CONFIG_PLACEHOLDER.format(repo_name=repo_name)
+        if _llm_available():
+            typer.secho(
+                "Falling back to placeholder xcode_config.yaml.",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+    (task_path / "xcode_config.yaml").write_text(xcode_config)
 
     typer.echo(f"\n✓ Repository cloned to: {repos_path}")
     typer.echo(f"✓ Task structure created at: {task_path}")
     typer.echo("\nNext steps:")
-    typer.echo(f"  1. Edit {task_path}/repo.md to add task details")
-    typer.echo(f"  2. Edit {task_path}/metadata.yaml to add base commits")
-    typer.echo(f"  3. Edit {task_path}/xcode_config.yaml with Xcode configuration")
-    typer.echo(f"  4. Fill in {task1_path}/task.md, tests.swift, and uitests.swift")
+    typer.echo(f"  1. Add PR URLs to src/anvil/wizard/github_prs/{repo_name}.txt")
+    typer.echo(f"  2. Run: anvil create-tasks {repo_name}")
+    typer.echo(f"  3. Review {task_path}/xcode_config.yaml")

@@ -9,7 +9,7 @@ from anvil.evals.constants import (
     XCODE_CONFIG_UI_TEST_FILES_DEST,
     XCODE_CONFIG_UI_TEST_TARGET,
 )
-from anvil.evals.test_file_copier import TaskTestCopier
+from anvil.evals.task_test_copier import TaskTestCopier
 
 
 def _write_swift(tmp: Path, content: str) -> Path:
