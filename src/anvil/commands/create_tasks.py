@@ -18,17 +18,23 @@ without it, task.md falls back to the raw PR description and test files are left
 from __future__ import annotations
 
 import json
-import os
+import re
 import subprocess
-import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
-from .constants import DEFAULT_MODEL, GITHUB_PRS_DIR, PR_URL_RE
-from .prompts import TASK_MD_SYSTEM, TESTS_SYSTEM, UITESTS_SYSTEM
+from .llm import DEFAULT_MODEL, call_llm, llm_available
+from .prompts import REPO_MD_UPDATE_SYSTEM, TASK_MD_SYSTEM, TESTS_SYSTEM, UITESTS_SYSTEM
+
+PR_URL_RE = re.compile(
+    r"github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<number>\d+)",
+    re.IGNORECASE,
+)
+
+GITHUB_PRS_DIR = Path(__file__).resolve().parent / "github_prs"
 
 
 def parse_pr_url(url: str) -> tuple[str, str, int]:
@@ -109,67 +115,24 @@ def _next_task_number(out_dir: Path) -> int:
     return max(existing, default=0) + 1
 
 
-def _llm_available() -> bool:
-    """Check if any LLM API key is configured."""
-    return bool(
-        os.environ.get("OPENROUTER_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-        or os.environ.get("OPENAI_API_KEY")
-    )
-
-
-def _strip_code_fences(text: str) -> str:
-    """Remove markdown code fences if the LLM wraps its output in them."""
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        first_newline = stripped.index("\n") if "\n" in stripped else len(stripped)
-        stripped = stripped[first_newline + 1 :]
-    if stripped.endswith("```"):
-        stripped = stripped[:-3]
-    return stripped.strip()
-
-
-warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
-
-
-def _call_llm(model: str, system: str, user: str) -> str | None:
-    """Send a prompt via litellm. Returns None if no API key is available."""
-    if not _llm_available():
-        return None
-    import litellm
-
-    resp = litellm.completion(
-        model=model,
-        max_tokens=8192,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    )
-    text = resp.choices[0].message.content
-    if not text:
-        return None
-    return _strip_code_fences(text)
-
-
 def _generate_task_md(model: str, title: str, body: str, diff: str) -> str | None:
     user_msg = f"PR Title: {title}\n\nPR Description:\n{body}"
     if diff:
         diff_preview = diff[:80_000] if len(diff) > 80_000 else diff
         user_msg += f"\n\nSolution diff (for deriving API surface):\n{diff_preview}"
-    return _call_llm(model, TASK_MD_SYSTEM, user_msg)
+    return call_llm(model, TASK_MD_SYSTEM, user_msg)
 
 
 def _generate_tests(model: str, task_md: str, diff: str, task_num: int) -> str | None:
     system = TESTS_SYSTEM.format(task_num=task_num)
     user_msg = f"task.md:\n{task_md}\n\nsolution.diff:\n{diff}"
-    return _call_llm(model, system, user_msg)
+    return call_llm(model, system, user_msg)
 
 
 def _generate_uitests(model: str, task_md: str, diff: str, task_num: int) -> str | None:
     system = UITESTS_SYSTEM.format(task_num=task_num)
     user_msg = f"task.md:\n{task_md}\n\nsolution.diff:\n{diff}"
-    result = _call_llm(model, system, user_msg)
+    result = call_llm(model, system, user_msg)
     if result and result.strip():
         return result
     return None
@@ -181,18 +144,19 @@ def _create_task(
     url: str,
     task_num: int,
     out_dir: Path,
-) -> tuple[int, str | None, str | None]:
+) -> dict:
     """Create a single task directory.
 
-    Returns *(rc, task_dir_name, base_sha)* where rc is 0 on success.
+    Returns a dict with keys: rc, task_dir_name, base_sha, title, url.
     """
     tag = f"  [task-{task_num}]"
+    fail = {"rc": 1, "task_dir_name": None, "base_sha": None, "title": None, "url": url}
     try:
         full_repo, _, pr_number = parse_pr_url(url)
         pr = _fetch_json(f"/repos/{full_repo}/pulls/{pr_number}")
     except Exception as e:
         typer.secho(f"{tag} Error: {e}", fg=typer.colors.RED, err=True)
-        return 1, None, None
+        return fail
 
     task_dir_name = f"task-{task_num}"
     task_dir = out_dir / task_dir_name
@@ -277,9 +241,60 @@ def _create_task(
         )
 
     typer.echo(f"{tag} Created (PR #{pr_number}: {title})")
-    return 0, task_dir_name, base_sha
+    return {
+        "rc": 0,
+        "task_dir_name": task_dir_name,
+        "base_sha": base_sha,
+        "title": title,
+        "url": url,
+    }
 
 
+def _update_repo_md(
+    model: str,
+    use_llm: bool,
+    out_dir: Path,
+    tasks: list[dict],
+    commits: dict[str, str],
+) -> None:
+    """Update repo.md with newly created task entries."""
+    repo_md_path = out_dir / "repo.md"
+    if not repo_md_path.exists():
+        typer.echo("No repo.md found — skipping update.")
+        return
+
+    existing = repo_md_path.read_text()
+
+    # Build a summary of new tasks for the LLM
+    task_lines = []
+    for t in sorted(tasks, key=lambda t: t["task_dir_name"] or ""):
+        base = commits.get(t["task_dir_name"], "unknown")
+        task_lines.append(
+            f"- {t['task_dir_name']}: title={t['title']}, url={t['url']}, base_commit={base}"
+        )
+    new_tasks_summary = "\n".join(task_lines)
+
+    typer.echo("Updating repo.md...")
+    updated: str | None = None
+    if use_llm:
+        user_msg = (
+            f"Current repo.md:\n{existing}\n\n"
+            f"New tasks to add:\n{new_tasks_summary}"
+        )
+        try:
+            updated = call_llm(model, REPO_MD_UPDATE_SYSTEM, user_msg)
+        except Exception as e:
+            typer.secho(
+                f"Warning: LLM repo.md update failed: {e}",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+
+    if updated and updated.strip():
+        repo_md_path.write_text(updated.rstrip() + "\n")
+        typer.echo(f"Updated {repo_md_path}")
+    else:
+        typer.echo(f"Skipped repo.md update (no LLM available).")
 
 
 def _resolve_input(url_or_file: str) -> tuple[list[str], str | None]:
@@ -340,7 +355,7 @@ def create_tasks(
         raise typer.Exit(1)
 
     # Check LLM availability
-    use_llm = _llm_available()
+    use_llm = llm_available()
     if use_llm:
         typer.echo(f"Using model: {model}")
     else:
@@ -372,24 +387,32 @@ def create_tasks(
     rc = 0
     max_parallel = min(3, len(urls))
 
-    def _run(i: int, url: str) -> tuple[int, str | None, str | None]:
+    def _run(i: int, url: str) -> dict:
         task_num = start_num + i
         typer.echo(f"\nTask {task_num}: {url}")
         return _create_task(model, use_llm, url, task_num, out_dir)
 
+    created_tasks: list[dict] = []
     with ThreadPoolExecutor(max_workers=max_parallel) as pool:
         futures = {
             pool.submit(_run, i, url): i for i, url in enumerate(urls)
         }
         for future in as_completed(futures):
-            task_rc, task_dir_name, base_sha = future.result()
-            rc |= task_rc
-            if task_dir_name and base_sha:
-                commits[task_dir_name] = base_sha
+            result = future.result()
+            rc |= result["rc"]
+            created_tasks.append(result)
+            if result["task_dir_name"] and result["base_sha"]:
+                commits[result["task_dir_name"]] = result["base_sha"]
 
     # Save metadata
     _save_metadata(meta_path, commits)
     typer.echo(f"\nUpdated {meta_path}")
+
+    # Update repo.md with new task entries
+    successful_tasks = [t for t in created_tasks if t["rc"] == 0]
+    if successful_tasks:
+        _update_repo_md(model, use_llm, out_dir, successful_tasks, commits)
+
     typer.echo(f"Created {len(urls)} task(s) in {out_dir}")
 
     if rc:

@@ -245,3 +245,29 @@ app_bundle_name: "AC Helper"
 build_timeout: 1800
 ```
 """
+
+REPO_MD_UPDATE_SYSTEM = """\
+You are updating a repo.md file for a software engineering benchmark. You will \
+be given the current repo.md content and a list of new tasks that were just \
+created. Update ONLY the ## Tasks section to include the new tasks, preserving \
+the existing format and any tasks already listed.
+
+Each task entry in the ## Tasks section must follow this format:
+
+```
+N. Task Title: PR_URL
+
+- Type: Feature or Fix
+- Patch: curl -L PR_URL.diff -o solution.diff
+- Base Commit: BASE_SHA
+```
+
+Rules:
+- Preserve all existing content outside the ## Tasks section exactly as-is \
+(## Commands, etc.).
+- If the repo.md already has tasks listed, append the new tasks after them \
+with correct numbering.
+- If a task with the same PR URL already exists, skip it (do not duplicate).
+- Output the COMPLETE updated repo.md content, not just the Tasks section.
+- Do NOT wrap the output in markdown code fences.
+"""
