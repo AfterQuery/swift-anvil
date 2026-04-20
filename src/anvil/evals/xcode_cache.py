@@ -89,13 +89,26 @@ def _remove_worktree(clone_dir: Path, work_dir: Path) -> None:
 
 
 def _format_build_errors(
-    stderr: str, max_lines: int = 10, fallback_chars: int = 500
+    stderr: str,
+    stdout: str = "",
+    max_lines: int = 10,
+    fallback_chars: int = 1200,
 ) -> str:
-    """Extract error lines from xcodebuild stderr, with a fallback tail."""
-    error_lines = [ln for ln in stderr.splitlines() if "error:" in ln.lower()]
+    """Extract useful xcodebuild failure lines, with a combined-stream fallback."""
+    combined = "\n".join(part for part in [stderr, stdout] if part)
+    error_lines = [ln for ln in combined.splitlines() if "error:" in ln.lower()]
     if error_lines:
         return "\n".join(error_lines[:max_lines])
-    return stderr[-fallback_chars:]
+    if "The following build commands failed:" in combined:
+        tail = combined.split("The following build commands failed:")[-1]
+        return "The following build commands failed:" + tail[:fallback_chars]
+    return combined[-fallback_chars:]
+
+
+def _is_package_resolution_failure(stdout: str, stderr: str) -> bool:
+    """Return True when xcodebuild failed during SwiftPM dependency resolution."""
+    needle = "could not resolve package dependencies"
+    return needle in stdout.lower() or needle in stderr.lower()
 
 
 def _default_cache_root() -> Path:
@@ -280,6 +293,17 @@ class XcodeBuildCache:
     def _main_build_failed_sentinel(self, repo_name: str, base_commit: str) -> Path:
         return self.commit_cache_dir(repo_name, base_commit) / ".main_build_failed"
 
+    def _expected_test_dd_dirs(
+        self, xcode_config: dict, repo_name: str, base_commit: str
+    ) -> list[Path]:
+        """Return test DD directories configured for this repo/commit."""
+        dirs: list[Path] = []
+        if xcode_config.get(XCODE_CONFIG_TEST_SCHEME):
+            dirs.append(self._test_derived_data_dir(repo_name, base_commit))
+        if xcode_config.get(XCODE_CONFIG_APP_TEST_SCHEME):
+            dirs.append(self._app_test_derived_data_dir(repo_name, base_commit))
+        return dirs
+
     def is_warm(self, repo_name: str, base_commit: str) -> bool:
         # DerivedData populated, or main build was permanently marked as failing
         # (so test DDs can still be cached independently).
@@ -373,8 +397,20 @@ class XcodeBuildCache:
                 shutil.rmtree(dd_dir, ignore_errors=True)
                 raise
 
+            if result.returncode != 0 and _is_package_resolution_failure(
+                result.stdout, result.stderr
+            ):
+                typer.echo(
+                    f"  Package resolution failed for {repo_name}@{base_commit[:8]}"
+                    " — retrying once...",
+                    err=True,
+                )
+                resolve_cmd = _build_resolve_packages_cmd(xcode_config, work_dir)
+                _run_xcodebuild(resolve_cmd, str(work_dir), build_timeout)
+                result = _run_xcodebuild(build_cmd, str(work_dir), build_timeout)
+
             if result.returncode != 0:
-                summary = _format_build_errors(result.stderr)
+                summary = _format_build_errors(result.stderr, result.stdout)
                 shutil.rmtree(dd_dir, ignore_errors=True)
                 has_test_schemes = xcode_config.get(
                     XCODE_CONFIG_TEST_SCHEME
@@ -394,6 +430,21 @@ class XcodeBuildCache:
                     )
 
         self._warm_test_dd(xcode_config, work_dir, repo_name, base_commit)
+        expected_test_dd = self._expected_test_dd_dirs(
+            xcode_config, repo_name, base_commit
+        )
+        if (
+            sentinel.exists()
+            and expected_test_dd
+            and not any(_dd_is_populated(path) for path in expected_test_dd)
+        ):
+            # Main build failed and no configured test DD could be warmed.
+            # Surface this as a true failure (not "cached").
+            sentinel.unlink(missing_ok=True)
+            _remove_worktree(clone_dir, work_dir)
+            raise RuntimeError(
+                f"Failed to warm any test DerivedData for {repo_name}@{base_commit[:8]}"
+            )
         self._save_package_resolved(xcode_config, work_dir, repo_name, base_commit)
 
         _remove_worktree(clone_dir, work_dir)
@@ -456,17 +507,12 @@ class XcodeBuildCache:
         self, xcode_config: dict, repo_name: str, base_commit: str
     ) -> bool:
         """Check if any test DerivedData directories need warming."""
-        if xcode_config.get(XCODE_CONFIG_TEST_SCHEME):
-            if not _dd_is_populated(
-                self._test_derived_data_dir(repo_name, base_commit)
-            ):
-                return True
-        if xcode_config.get(XCODE_CONFIG_APP_TEST_SCHEME):
-            if not _dd_is_populated(
-                self._app_test_derived_data_dir(repo_name, base_commit)
-            ):
-                return True
-        return False
+        return any(
+            not _dd_is_populated(path)
+            for path in self._expected_test_dd_dirs(
+                xcode_config, repo_name, base_commit
+            )
+        )
 
     def _warm_test_dd(
         self,
@@ -509,7 +555,14 @@ class XcodeBuildCache:
         dummy_file.write_text("import XCTest\nclass AnvilWarmupTests: XCTestCase {}\n")
 
         test_dd_dir.mkdir(parents=True, exist_ok=True)
-        test_cmd_info = _build_xcodebuild_test_cmd(xcode_config, work_dir, test_dd_dir)
+        # Warming is the one moment it's safe to resolve packages — the SPM
+        # test package is standalone and may have no checked-in
+        # Package.resolved (or the checked-in one may be stale after our
+        # pre-build pin edits).  Eval runs re-use the warmed DD and keep
+        # resolution disabled for determinism.
+        test_cmd_info = _build_xcodebuild_test_cmd(
+            xcode_config, work_dir, test_dd_dir, allow_pkg_resolution=True
+        )
         if not test_cmd_info:
             dummy_file.unlink(missing_ok=True)
             return
@@ -529,7 +582,10 @@ class XcodeBuildCache:
 
         if result.returncode != 0:
             summary = _format_build_errors(
-                result.stderr, max_lines=5, fallback_chars=300
+                result.stderr,
+                result.stdout,
+                max_lines=5,
+                fallback_chars=300,
             )
             typer.echo(f"  Test warm failed (non-fatal): {summary}", err=True)
             shutil.rmtree(test_dd_dir, ignore_errors=True)
@@ -593,7 +649,10 @@ class XcodeBuildCache:
 
         if result.returncode != 0:
             summary = _format_build_errors(
-                result.stderr, max_lines=5, fallback_chars=300
+                result.stderr,
+                result.stdout,
+                max_lines=5,
+                fallback_chars=300,
             )
             typer.echo(f"  App-test warm failed (non-fatal): {summary}", err=True)
             shutil.rmtree(app_test_dd, ignore_errors=True)
@@ -765,6 +824,17 @@ def _build_xcodebuild_cmd(
 
     cmd.extend(xcode_config.get("extra_build_flags", []))
 
+    return cmd
+
+
+def _build_resolve_packages_cmd(xcode_config: dict, work_dir: Path) -> list[str]:
+    """Build an xcodebuild command that resolves package dependencies only."""
+    cmd = ["xcodebuild", "-resolvePackageDependencies"]
+    cmd.extend(_resolve_project_args(xcode_config, work_dir))
+    scheme = xcode_config.get(XCODE_CONFIG_SCHEME, "")
+    if scheme:
+        cmd.extend(["-scheme", scheme])
+    cmd.extend(xcode_config.get("extra_build_flags", []))
     return cmd
 
 
@@ -1402,6 +1472,10 @@ def _build_xcodebuild_app_test_cmd(
     if app_test_target:
         cmd.extend(["-only-testing", app_test_target])
 
+    app_test_plan = xcode_config.get("app_test_plan", "")
+    if app_test_plan:
+        cmd.extend(["-testPlan", app_test_plan])
+
     cmd.extend(xcode_config.get("extra_build_flags", []))
 
     return cmd, work_dir
@@ -1425,8 +1499,23 @@ def _run_xcodebuild(
     cwd: str,
     timeout: int,
 ) -> subprocess.CompletedProcess:
-    """Run xcodebuild, killing the entire process group on timeout."""
+    """Run xcodebuild, killing the entire process group on timeout.
+
+    Each invocation gets a per-cwd ``TMPDIR`` under the system temp root so
+    parallel warms of different worktrees don't race on shared tool caches
+    (e.g. Sourcery's ``$TMPDIR/SwiftTemplate/<ver>`` build dir, which
+    otherwise errors with "item with the same name already exists" under
+    concurrency).  Rooting it under ``tempfile.gettempdir()`` (``/var/folders/...``)
+    keeps it within the paths that SwiftPM's sandbox allows.
+    """
+    import tempfile
+
     logger.debug("Running xcodebuild: %s", " ".join(cmd))
+    cwd_hash = hashlib.md5(str(cwd).encode()).hexdigest()[:16]
+    tmpdir = Path(tempfile.gettempdir()) / f"anvil-xcb-{cwd_hash}"
+    tmpdir.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env["TMPDIR"] = str(tmpdir)
     proc = subprocess.Popen(
         cmd,
         cwd=cwd,
@@ -1434,6 +1523,7 @@ def _run_xcodebuild(
         stderr=subprocess.PIPE,
         text=True,
         start_new_session=True,
+        env=env,
     )
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
