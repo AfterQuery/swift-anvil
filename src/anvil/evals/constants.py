@@ -69,7 +69,7 @@ OUTPUT_KEY_TESTS = "tests"
 # -----------------------------------------------------------------------------
 DEFAULT_XCODEBUILD_TIMEOUT = 600
 DEFAULT_BUILD_TIMEOUT = 1200  # Cache warming / main build
-DEFAULT_MAX_WORKERS = 3
+DEFAULT_MAX_WORKERS = 2
 BUILD_GATE_SECONDS = 1
 
 # UI test config keys → app test config keys (for _as_ui_test_config mapping)

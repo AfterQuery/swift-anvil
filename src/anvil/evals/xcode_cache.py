@@ -288,6 +288,9 @@ class XcodeBuildCache:
         module_cache = dest / "ModuleCache.noindex"
         if module_cache.exists():
             shutil.rmtree(module_cache, ignore_errors=True)
+        source_packages = dest / "SourcePackages"
+        if source_packages.exists():
+            shutil.rmtree(source_packages, ignore_errors=True)
         return dest
 
     def _main_build_failed_sentinel(self, repo_name: str, base_commit: str) -> Path:
@@ -454,7 +457,19 @@ class XcodeBuildCache:
 
     @staticmethod
     def _package_resolved_path(xcode_config: dict, work_dir: Path) -> Path | None:
-        """Return the project-level Package.resolved path, or None."""
+        """Return the authoritative Package.resolved path for the build.
+
+        When a workspace is configured, xcodebuild uses the workspace-level
+        ``Package.resolved`` (``<workspace>/xcshareddata/swiftpm/...``) and
+        ignores the project's copy.  Fall back to the project's when no
+        workspace is set (or the workspace file is absent on disk).
+        """
+        workspace_rel, workspace_path = resolve_repo_relative_path(
+            xcode_config.get("workspace", ""),
+            work_dir,
+        )
+        if workspace_rel and workspace_path and workspace_path.exists():
+            return workspace_path / "xcshareddata" / "swiftpm" / "Package.resolved"
         project_rel, _ = resolve_repo_relative_path(
             xcode_config.get(XCODE_CONFIG_PROJECT, ""),
             work_dir,
@@ -1471,6 +1486,13 @@ def _build_xcodebuild_app_test_cmd(
     app_test_target = xcode_config.get(XCODE_CONFIG_APP_TEST_TARGET, "")
     if app_test_target:
         cmd.extend(["-only-testing", app_test_target])
+
+    # Let xcode_config.yaml exclude pre-existing repo tests that are broken in
+    # our CI env (e.g. locale-sensitive formatter tests, snapshot tests missing
+    # reference images).  Each entry is passed straight through as
+    # `-skip-testing:<value>` (e.g. "MastodonTests/MetricFormatterTests").
+    for skip in xcode_config.get("app_test_skip", []):
+        cmd.extend(["-skip-testing:" + skip])
 
     app_test_plan = xcode_config.get("app_test_plan", "")
     if app_test_plan:

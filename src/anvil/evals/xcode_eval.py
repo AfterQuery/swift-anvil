@@ -199,7 +199,9 @@ def _run_spm_tests(
     else:
         test_dd = dd_dir
     return _run_xcodebuild_tests(
-        _build_xcodebuild_test_cmd(xcode_config, worktree_dir, test_dd),
+        _build_xcodebuild_test_cmd(
+            xcode_config, worktree_dir, test_dd, allow_pkg_resolution=True
+        ),
         timeout=_build_timeout(xcode_config),
     )
 
@@ -216,6 +218,7 @@ def _run_app_tests(
         xcode_config,
         worktree_dir,
         app_test_dd,
+        allow_pkg_resolution=True,
     )
     if not cmd_info:
         return None
@@ -319,7 +322,7 @@ def eval_single_patch(
             worktree_dir,
             xcode_config=xcode_config,
             copy_derived_data=False,
-            run_pre_build=False,
+            run_pre_build=True,
         )
 
         if patch and patch.strip():
