@@ -10,6 +10,7 @@ tests/__init__.py
 
 # Local Working Stuff
 /scripts
+.anvil-path.sh
 .env
 .claude
 .pdm-build
@@ -22,4 +23,6 @@ datasets
 tasks/firefox-ios
 tasks/iOS-Open-GPX-Tracker
 tasks/mastodon-ios
+tasks/GitHawk
 src/anvil/commands/github_prs/mastodon-ios.txt
+src/anvil/commands/github_prs/GitHawk.txt

@@ -1,3 +1,14 @@
 #!/usr/bin/env bash
-# Wrapper so users can run ./anvil <args> without activating the venv
-exec uv run anvil "$@"
+# Run the CLI with this repo's uv environment. Same as ./anvil or uv run anvil from the repo.
+# With repo root on PATH (see make setup → .anvil-path.sh), bare `anvil` works from any cwd.
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]:-$0}"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+ROOT="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+
+exec uv run --project "$ROOT" anvil "$@"

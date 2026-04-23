@@ -296,32 +296,29 @@ def _update_repo_md(
         typer.echo(f"Skipped repo.md update (no LLM available).")
 
 
-def _resolve_input(url_or_file: str) -> tuple[list[str], str | None]:
-    """Return *(urls, repo_name_hint)*.
-
-    Accepts a GitHub PR URL, a path to a text file, or a bare repo name
-    that maps to ``commands/github_prs/<name>.txt``.
-    """
-    # 1. Explicit file path
-    path = Path(url_or_file)
-    if path.is_file():
-        return _read_url_file(path), path.stem
-
-    # 2. Bare repo name → look up in github_prs/
-    pr_file = GITHUB_PRS_DIR / f"{url_or_file}.txt"
-    if pr_file.is_file():
-        return _read_url_file(pr_file), url_or_file
-
-    # 3. Single PR URL
-    return [url_or_file], None
-
-
 def _read_url_file(path: Path) -> list[str]:
     return [
         line.strip()
         for line in path.read_text().splitlines()
         if line.strip() and not line.strip().startswith("#")
     ]
+
+
+def _resolve_input(url_or_file: str) -> tuple[list[str], str | None]:
+    """Return *(urls, repo_name_hint)*.
+
+    Accepts a GitHub PR URL, a path to a text file, or a bare repo name
+    that maps to ``commands/github_prs/<name>.txt``.
+    """
+    path = Path(url_or_file)
+    if path.is_file():
+        return _read_url_file(path), path.stem
+
+    pr_file = GITHUB_PRS_DIR / f"{url_or_file}.txt"
+    if pr_file.is_file():
+        return _read_url_file(pr_file), url_or_file
+
+    return [url_or_file], None
 
 
 def create_tasks(
