@@ -145,6 +145,189 @@ def _run_pre_build_commands(xcode_config: dict, work_dir: Path) -> None:
             )
 
 
+def _lookup_pbx_target_uuid(pbx: str, target_name: str) -> str | None:
+    """Return the 24-char UUID of a PBXNativeTarget named *target_name*."""
+    if not target_name:
+        return None
+    m = re.search(
+        r"(\w{24}) /\* "
+        + re.escape(target_name)
+        + r" \*/ = \{\s*isa = PBXNativeTarget;",
+        pbx,
+    )
+    return m.group(1) if m else None
+
+
+def _lookup_pbx_product_name(pbx: str, target_uuid: str, fallback: str) -> str:
+    """Return the app product name (without .app) referenced by *target_uuid*."""
+    m = re.search(
+        rf"{target_uuid}[^}}]*productReference = \w{{24}} /\* (.+?)\.app \*/",
+        pbx,
+        re.DOTALL,
+    )
+    return m.group(1) if m else fallback
+
+
+def _render_testable_entry(
+    test_target: str, test_target_uuid: str, proj_container: str
+) -> str:
+    return (
+        f"         <TestableReference\n"
+        f'            skipped = "NO">\n'
+        f"            <BuildableReference\n"
+        f'               BuildableIdentifier = "primary"\n'
+        f'               BlueprintIdentifier = "{test_target_uuid}"\n'
+        f'               BuildableName = "{test_target}.xctest"\n'
+        f'               BlueprintName = "{test_target}"\n'
+        f'               ReferencedContainer = "container:{proj_container}">\n'
+        f"            </BuildableReference>\n"
+        f"         </TestableReference>\n"
+    )
+
+
+def _render_minimal_scheme(
+    scheme_name: str,
+    host_target_uuid: str,
+    app_product_name: str,
+    proj_container: str,
+    testable_entries: str,
+) -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<Scheme\n"
+        '   LastUpgradeVersion = "1620"\n'
+        '   version = "1.7">\n'
+        "   <BuildAction\n"
+        '      parallelizeBuildables = "YES"\n'
+        '      buildImplicitDependencies = "YES">\n'
+        "      <BuildActionEntries>\n"
+        "         <BuildActionEntry\n"
+        '            buildForTesting = "YES"\n'
+        '            buildForRunning = "YES"\n'
+        '            buildForProfiling = "YES"\n'
+        '            buildForArchiving = "YES"\n'
+        '            buildForAnalyzing = "YES">\n'
+        "            <BuildableReference\n"
+        '               BuildableIdentifier = "primary"\n'
+        f'               BlueprintIdentifier = "{host_target_uuid}"\n'
+        f'               BuildableName = "{app_product_name}.app"\n'
+        f'               BlueprintName = "{scheme_name}"\n'
+        f'               ReferencedContainer = "container:{proj_container}">\n'
+        "            </BuildableReference>\n"
+        "         </BuildActionEntry>\n"
+        "      </BuildActionEntries>\n"
+        "   </BuildAction>\n"
+        "   <TestAction\n"
+        '      buildConfiguration = "Debug"\n'
+        '      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"\n'
+        '      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"\n'
+        '      shouldUseLaunchSchemeArgsEnv = "YES">\n'
+        "      <Testables>\n"
+        f"{testable_entries}"
+        "      </Testables>\n"
+        "   </TestAction>\n"
+        "   <LaunchAction\n"
+        '      buildConfiguration = "Debug"\n'
+        '      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"\n'
+        '      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"\n'
+        '      launchStyle = "0"\n'
+        '      useCustomWorkingDirectory = "NO"\n'
+        '      ignoresPersistentStateOnLaunch = "NO"\n'
+        '      debugDocumentVersioning = "YES"\n'
+        '      debugServiceExtension = "internal"\n'
+        '      allowLocationSimulation = "YES">\n'
+        "      <BuildableProductRunnable\n"
+        '         runnableDebuggingMode = "0">\n'
+        "         <BuildableReference\n"
+        '            BuildableIdentifier = "primary"\n'
+        f'            BlueprintIdentifier = "{host_target_uuid}"\n'
+        f'            BuildableName = "{app_product_name}.app"\n'
+        f'            BlueprintName = "{scheme_name}"\n'
+        f'            ReferencedContainer = "container:{proj_container}">\n'
+        "         </BuildableReference>\n"
+        "      </BuildableProductRunnable>\n"
+        "   </LaunchAction>\n"
+        "</Scheme>\n"
+    )
+
+
+def _ensure_shared_scheme(
+    xcode_config: dict,
+    work_dir: Path,
+    scheme_name: str,
+    test_target: str = "",
+) -> None:
+    """Ensure a shared ``<scheme_name>.xcscheme`` exists in the main project.
+
+    Some repos only commit user-local schemes (in ``xcuserdata``) while
+    xcodebuild requires a shared scheme file to build from the command line.
+    When the configured scheme is missing from ``xcshareddata/xcschemes``,
+    generate a minimal shared scheme pointing at the target with the same
+    name, optionally listing *test_target* as a testable reference.
+    """
+    if not scheme_name:
+        return
+
+    project_rel, _ = resolve_repo_relative_path(
+        xcode_config.get(XCODE_CONFIG_PROJECT, ""),
+        work_dir,
+    )
+    if not project_rel:
+        return
+
+    scheme_dir = work_dir / project_rel / "xcshareddata" / "xcschemes"
+    scheme_path = scheme_dir / (scheme_name + ".xcscheme")
+
+    pbxproj_path = work_dir / project_rel / PROJECT_PBXPROJ
+    if not pbxproj_path.exists():
+        return
+    pbx = pbxproj_path.read_text()
+
+    proj_container = project_rel.split("/")[-1]
+    test_target_uuid = (
+        _lookup_pbx_target_uuid(pbx, test_target) if test_target else None
+    )
+    testable_entry = (
+        _render_testable_entry(test_target, test_target_uuid, proj_container)
+        if test_target and test_target_uuid
+        else ""
+    )
+
+    if scheme_path.exists():
+        if testable_entry:
+            scheme_xml = scheme_path.read_text()
+            if test_target not in scheme_xml:
+                if "      <Testables>\n      </Testables>" in scheme_xml:
+                    scheme_xml = scheme_xml.replace(
+                        "      <Testables>\n      </Testables>",
+                        f"      <Testables>\n{testable_entry}      </Testables>",
+                    )
+                elif "      </Testables>" in scheme_xml:
+                    scheme_xml = scheme_xml.replace(
+                        "      </Testables>",
+                        f"{testable_entry}      </Testables>",
+                    )
+                scheme_path.write_text(scheme_xml)
+        return
+
+    host_target_uuid = _lookup_pbx_target_uuid(pbx, scheme_name)
+    if not host_target_uuid:
+        return
+    app_product_name = _lookup_pbx_product_name(pbx, host_target_uuid, scheme_name)
+
+    scheme_dir.mkdir(parents=True, exist_ok=True)
+    scheme_path.write_text(
+        _render_minimal_scheme(
+            scheme_name,
+            host_target_uuid,
+            app_product_name,
+            proj_container,
+            testable_entry,
+        )
+    )
+    logger.info("Created minimal shared scheme at %s", scheme_path)
+
+
 def get_test_destination(xcode_config: dict) -> str:
     """Resolve test_destination from config (test_destination or destination)."""
     return xcode_config.get(
@@ -378,6 +561,9 @@ class XcodeBuildCache:
         )
 
         _run_pre_build_commands(xcode_config, work_dir)
+        _ensure_shared_scheme(
+            xcode_config, work_dir, xcode_config.get(XCODE_CONFIG_SCHEME, "")
+        )
 
         sentinel = self._main_build_failed_sentinel(repo_name, base_commit)
         if not build_cached and not sentinel.exists():
@@ -627,6 +813,9 @@ class XcodeBuildCache:
             return
 
         inject_app_test_target(xcode_config, work_dir)
+        _ensure_shared_scheme(
+            xcode_config, work_dir, app_test_scheme, test_target=app_test_target
+        )
 
         dummy_dir = work_dir / app_test_files_dest
         dummy_dir.mkdir(parents=True, exist_ok=True)
