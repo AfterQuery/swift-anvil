@@ -174,9 +174,11 @@ immediately present.
 - Include helper methods for common navigation (opening tabs, dismissing sheets).
 - Each test method should map to one or more acceptance criteria from the task.
 - Include MARK comments referencing which acceptance criteria each test covers.
-- If the task is purely backend/model logic with no UI changes, output an \
-empty string.
-- Output ONLY the Swift source code, no markdown fences or explanation.
+- If `task.md` includes `### UI tests` with **Not applicable.**, or the task is \
+otherwise purely non-UI (no user-visible surfaces to exercise), output **exactly** \
+an empty string: no Swift, no whitespace, no placeholder class, no comments.
+- Output ONLY the Swift source code when UI tests are in scope, no markdown \
+fences or explanation.
 """
 
 XCODE_CONFIG_SYSTEM = """\
@@ -328,23 +330,26 @@ REPO_MD_UPDATE_SYSTEM = """\
 You are updating a repo.md file for a software engineering benchmark. You will \
 be given the current repo.md content and a list of new tasks that were just \
 created. Update ONLY the ## Tasks section to include the new tasks, preserving \
-the existing format and any tasks already listed.
+any tasks already listed.
 
-Each task entry in the ## Tasks section must follow this format:
+**Format for every task line in ## Tasks** (one line per task, no sub-bullets):
 
-```
-N. Task Title: PR_URL
+`N. <Short descriptive title>: <full https://github.com/.../pull/N URL>`
 
-- Type: Feature or Fix
-- Patch: curl -L PR_URL.diff -o solution.diff
-- Base Commit: BASE_SHA
-```
+You may use a markdown link for the title instead: \
+`N. [<title>](https://github.com/owner/repo/pull/123)` — but do **not** add extra \
+lines under each task.
 
 Rules:
+- **Do not** add `- Type:`, `- Patch:`, `- Base Commit:`, or `curl` commands — \
+base commits and patches live in harness metadata, not in repo.md.
+- **Do not** include placeholder or example tasks such as \
+"[Task Name](link/to/pr)" or template bullets; remove them if still present.
 - Preserve all existing content outside the ## Tasks section exactly as-is \
-(## Commands, etc.).
-- If the repo.md already has tasks listed, append the new tasks after them \
-with correct numbering.
+(## Commands, repository line, etc.).
+- Inside ## Tasks, normalize entries to the one-line-per-task format above when \
+you touch them; drop obsolete Type/Patch/Base sub-bullets from tasks you list.
+- Append new tasks with correct numbering after existing tasks.
 - If a task with the same PR URL already exists, skip it (do not duplicate).
 - Output the COMPLETE updated repo.md content, not just the Tasks section.
 - Do NOT wrap the output in markdown code fences.
