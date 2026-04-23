@@ -24,7 +24,7 @@ from ..agents.harness import (
     run_agent_in_modal,
     write_single_result,
 )
-from ..config import eval_dir, load_repo_env, tasks_dir
+from ..config import eval_dir, load_repo_env, source_tasks_dir, tasks_dir
 from ..util import ensure_dir, model_id_from_model, provider_env_var_from_model
 from .pass_at_k import (
     compute_pass_at_k_summary,
@@ -209,6 +209,28 @@ def run_evaluation(
         typer.echo(f"Deleted existing results: {base_out_path}")
 
     base_out = ensure_dir(base_out_path)
+
+    # If the dataset hasn't been converted yet but a source task directory
+    # (tasks/<repo>/) exists, auto-run convert-dataset
+    instances_path = tasks_dir(dataset_id) / "instances.yaml"
+    source_dir = source_tasks_dir(dataset_id)
+    if not instances_path.exists() and source_dir.exists():
+        from ..commands.converters import convert_dataset
+
+        typer.echo(
+            f"Dataset not yet converted at {instances_path.parent}; "
+            f"auto-running convert-dataset on {source_dir}..."
+        )
+        try:
+            convert_dataset(dataset=str(source_dir))
+        except typer.Exit as e:
+            if e.exit_code:
+                typer.echo(
+                    f"Error: auto convert-dataset exited with code {e.exit_code}",
+                    err=True,
+                )
+                return e.exit_code
+
     instances = load_instances(dataset_id)
 
     if task_filter:
