@@ -476,9 +476,6 @@ class XcodeBuildCache:
             shutil.rmtree(source_packages, ignore_errors=True)
         return dest
 
-    def _main_build_failed_sentinel(self, repo_name: str, base_commit: str) -> Path:
-        return self.commit_cache_dir(repo_name, base_commit) / ".main_build_failed"
-
     def _expected_test_dd_dirs(
         self, xcode_config: dict, repo_name: str, base_commit: str
     ) -> list[Path]:
@@ -491,12 +488,7 @@ class XcodeBuildCache:
         return dirs
 
     def is_warm(self, repo_name: str, base_commit: str) -> bool:
-        # DerivedData populated, or main build was permanently marked as failing
-        # (so test DDs can still be cached independently).
-        return (
-            _dd_is_populated(self._derived_data_dir(repo_name, base_commit))
-            or self._main_build_failed_sentinel(repo_name, base_commit).exists()
-        )
+        return _dd_is_populated(self._derived_data_dir(repo_name, base_commit))
 
     def ensure_cloned(self, repo_name: str, repo_path: Path) -> None:
         """Clone the repo into the cache and fetch all commits.
@@ -565,8 +557,7 @@ class XcodeBuildCache:
             xcode_config, work_dir, xcode_config.get(XCODE_CONFIG_SCHEME, "")
         )
 
-        sentinel = self._main_build_failed_sentinel(repo_name, base_commit)
-        if not build_cached and not sentinel.exists():
+        if not build_cached:
             typer.echo(f"  Building {repo_name} (full clean build)...")
             dd_dir.mkdir(parents=True, exist_ok=True)
 
@@ -601,39 +592,11 @@ class XcodeBuildCache:
             if result.returncode != 0:
                 summary = _format_build_errors(result.stderr, result.stdout)
                 shutil.rmtree(dd_dir, ignore_errors=True)
-                has_test_schemes = xcode_config.get(
-                    XCODE_CONFIG_TEST_SCHEME
-                ) or xcode_config.get(XCODE_CONFIG_APP_TEST_SCHEME)
-                if has_test_schemes:
-                    # Main build failed but test DDs can still be warmed independently.
-                    # Write a sentinel so we don't retry this failing build next time.
-                    sentinel.touch()
-                    typer.echo(
-                        f"  Main build failed for {repo_name}@{base_commit[:8]}"
-                        f" (will still warm test DDs):\n{summary}",
-                        err=True,
-                    )
-                else:
-                    raise RuntimeError(
-                        f"xcodebuild failed for {repo_name}@{base_commit[:8]}"
-                    )
+                raise RuntimeError(
+                    f"Main build failed for {repo_name}@{base_commit[:8]}:\n{summary}"
+                )
 
         self._warm_test_dd(xcode_config, work_dir, repo_name, base_commit)
-        expected_test_dd = self._expected_test_dd_dirs(
-            xcode_config, repo_name, base_commit
-        )
-        if (
-            sentinel.exists()
-            and expected_test_dd
-            and not any(_dd_is_populated(path) for path in expected_test_dd)
-        ):
-            # Main build failed and no configured test DD could be warmed.
-            # Surface this as a true failure (not "cached").
-            sentinel.unlink(missing_ok=True)
-            _remove_worktree(clone_dir, work_dir)
-            raise RuntimeError(
-                f"Failed to warm any test DerivedData for {repo_name}@{base_commit[:8]}"
-            )
         self._save_package_resolved(xcode_config, work_dir, repo_name, base_commit)
 
         _remove_worktree(clone_dir, work_dir)
@@ -778,7 +741,9 @@ class XcodeBuildCache:
         except subprocess.TimeoutExpired:
             dummy_file.unlink(missing_ok=True)
             shutil.rmtree(test_dd_dir, ignore_errors=True)
-            return
+            raise RuntimeError(
+                f"Test DerivedData warm timed out for {repo_name}@{base_commit[:8]}"
+            )
         dummy_file.unlink(missing_ok=True)
 
         if result.returncode != 0:
@@ -788,8 +753,11 @@ class XcodeBuildCache:
                 max_lines=5,
                 fallback_chars=300,
             )
-            typer.echo(f"  Test warm failed (non-fatal): {summary}", err=True)
             shutil.rmtree(test_dd_dir, ignore_errors=True)
+            raise RuntimeError(
+                f"Test DerivedData warm failed for {repo_name}@{base_commit[:8]}:\n"
+                f"{summary}"
+            )
 
     def _warm_app_test_dd(
         self,
@@ -848,7 +816,9 @@ class XcodeBuildCache:
         except subprocess.TimeoutExpired:
             dummy_file.unlink(missing_ok=True)
             shutil.rmtree(app_test_dd, ignore_errors=True)
-            return
+            raise RuntimeError(
+                f"App-test DerivedData warm timed out for {repo_name}@{base_commit[:8]}"
+            )
         dummy_file.unlink(missing_ok=True)
 
         if result.returncode != 0:
@@ -858,8 +828,11 @@ class XcodeBuildCache:
                 max_lines=5,
                 fallback_chars=300,
             )
-            typer.echo(f"  App-test warm failed (non-fatal): {summary}", err=True)
             shutil.rmtree(app_test_dd, ignore_errors=True)
+            raise RuntimeError(
+                f"App-test DerivedData warm failed for {repo_name}@{base_commit[:8]}:\n"
+                f"{summary}"
+            )
 
     def checkout(
         self,
