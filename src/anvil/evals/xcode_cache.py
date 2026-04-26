@@ -145,6 +145,868 @@ def _run_pre_build_commands(xcode_config: dict, work_dir: Path) -> None:
             )
 
 
+# Xcode 15+ dropped libarclite (needed for iOS < 12) and Swift 4 support.
+_MIN_IPHONEOS_DEPLOYMENT_TARGET = "12.0"
+_MIN_SWIFT_VERSION = "5.0"
+
+_RENAME_FIXIT_MAX_PASSES = 5
+
+
+def _bump_pbxproj_min_ios(pbx_path: Path, min_ios: str) -> None:
+    """Raise every IPHONEOS_DEPLOYMENT_TARGET in *pbx_path* below *min_ios*."""
+    if not pbx_path.exists():
+        return
+    pbx = pbx_path.read_text()
+    floor = tuple(int(p) for p in min_ios.split("."))
+
+    def bump(m: re.Match[str]) -> str:
+        cur = tuple(int(p) for p in m.group(1).split("."))
+        return f"IPHONEOS_DEPLOYMENT_TARGET = {min_ios};" if cur < floor else m.group(0)
+
+    new_pbx = re.sub(r"IPHONEOS_DEPLOYMENT_TARGET = (\d+(?:\.\d+)*);", bump, pbx)
+    if new_pbx != pbx:
+        _write_patched_source(pbx_path, new_pbx)
+        logger.info("Bumped IPHONEOS_DEPLOYMENT_TARGET to %s in %s", min_ios, pbx_path)
+
+
+def _bump_main_project_min_ios(
+    xcode_config: dict, work_dir: Path, min_ios: str
+) -> None:
+    """Bump the main Xcode project's deployment target floor to *min_ios*."""
+    project_rel, _ = resolve_repo_relative_path(
+        xcode_config.get(XCODE_CONFIG_PROJECT, ""), work_dir
+    )
+    if not project_rel:
+        return
+    _bump_pbxproj_min_ios(work_dir / project_rel / PROJECT_PBXPROJ, min_ios)
+
+
+def _patch_podfile_build_settings(work_dir: Path, min_ios: str, min_swift: str) -> None:
+    """Inject a Podfile post_install hook bumping pod deployment / Swift floors."""
+    podfile = work_dir / "Podfile"
+    if not podfile.exists():
+        return
+    content = podfile.read_text()
+    marker = "# anvil-pod-compat-workaround"
+    if marker in content:
+        return
+
+    bump_block = (
+        f"  {marker}\n"
+        f"  installer.pods_project.targets.each do |target|\n"
+        f"    target.build_configurations.each do |config|\n"
+        f"      ios_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']\n"
+        f"      if ios_target.nil? || Gem::Version.new(ios_target) < Gem::Version.new('{min_ios}')\n"
+        f"        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '{min_ios}'\n"
+        f"      end\n"
+        f"      swift_version = config.build_settings['SWIFT_VERSION']\n"
+        f"      if swift_version && Gem::Version.new(swift_version) < Gem::Version.new('{min_swift}')\n"
+        f"        config.build_settings['SWIFT_VERSION'] = '{min_swift}'\n"
+        f"      end\n"
+        f"    end\n"
+        f"  end\n"
+    )
+
+    pattern = re.compile(r"(post_install\s+do\s*\|[^|]+\|\s*\n)")
+    if pattern.search(content):
+        new_content = pattern.sub(r"\1" + bump_block, content, count=1)
+    else:
+        new_content = (
+            content.rstrip()
+            + "\n\npost_install do |installer|\n"
+            + bump_block
+            + "end\n"
+        )
+
+    podfile.write_text(new_content)
+    logger.info(
+        "Patched Podfile: IPHONEOS_DEPLOYMENT_TARGET>=%s, SWIFT_VERSION>=%s",
+        min_ios,
+        min_swift,
+    )
+
+
+# File-scoped Swift 5 fix-its for pinned pod versions.
+_POD_SOURCE_PATCHES: tuple[tuple[str, "re.Pattern[str]", str], ...] = (
+    # `@available(*, unavailable)` on a stored property is a hard error in Swift 5+.
+    (
+        "Pods/Pageboy/Sources/Pageboy/PageboyViewController.swift",
+        re.compile(
+            r"^[ \t]*@available\(\*, unavailable,[^)]*\)\n"
+            r"(?=[ \t]*(?:public|open|internal|private|fileprivate)?\s*"
+            r"(?:var|let)\s+showsPageControl\b)",
+            re.MULTILINE,
+        ),
+        "",
+    ),
+    # kCATransition* constants are CATransitionSubtype in Swift 5, not String.
+    (
+        "Pods/Pageboy/Sources/Pageboy/Utilities/Transitioning/TransitionOperation+Action.swift",
+        re.compile(r"(\bvar\s+transitionSubType\s*:\s*)String(\s*\{)"),
+        r"\1CATransitionSubtype\2",
+    ),
+    # CATransition.type became CATransitionType.
+    (
+        "Pods/Pageboy/Sources/Pageboy/Extensions/PageboyViewController+Transitioning.swift",
+        re.compile(r"(\btransition\.type\s*=\s*)(self\.style\.rawValue)\b"),
+        r"\1CATransitionType(rawValue: \2)",
+    ),
+    # UIPageViewController option keys are now UIPageViewController.OptionsKey.
+    (
+        "Pods/Pageboy/Sources/Pageboy/Extensions/PageboyViewController+Management.swift",
+        re.compile(r"\[String\s*:\s*Any\]"),
+        "[UIPageViewController.OptionsKey: Any]",
+    ),
+    # `open` member in a `final` class — fix-it suggests `public`.
+    (
+        "Pods/MessageViewController/MessageViewController/MessageAutocompleteController.swift",
+        re.compile(r"\bopen\s+var\s+appendSpaceOnCompletion\b"),
+        "public var appendSpaceOnCompletion",
+    ),
+    # `preserveTypingAttributes` builds a local [String: Any] then assigns to
+    # textView.typingAttributes which became [NSAttributedString.Key: Any].
+    (
+        "Pods/MessageViewController/MessageViewController/MessageAutocompleteController.swift",
+        re.compile(r"(\bvar\s+typingAttributes\s*=\s*)\[String\s*:\s*Any\]\(\)"),
+        r"\1[NSAttributedString.Key: Any]()",
+    ),
+    (
+        "Pods/MessageViewController/MessageViewController/MessageAutocompleteController.swift",
+        re.compile(r"typingAttributes\[\$0\.key\.rawValue\]"),
+        "typingAttributes[$0.key]",
+    ),
+    # UITextView.typingAttributes is [NSAttributedString.Key: Any] in Swift 5.
+    (
+        "Pods/MessageViewController/MessageViewController/MessageTextView.swift",
+        re.compile(r"(\bdefaultTextAttributes\s*:\s*)\[String\s*:\s*Any\]"),
+        r"\1[NSAttributedString.Key: Any]",
+    ),
+    # Drop now-redundant `.rawValue` so keys match the new dict type.
+    (
+        "Pods/MessageViewController/MessageViewController/MessageTextView.swift",
+        re.compile(r"(NSAttributedString\.Key\.\w+)\.rawValue\b"),
+        r"\1",
+    ),
+    # Apollo's playground display extension uses unavailable Swift 4 protocol.
+    (
+        "Pods/Apollo/Sources/Apollo/RecordSet.swift",
+        re.compile(
+            r"extension RecordSet:\s*CustomPlaygroundQuickLookable\s*\{\s*\n"
+            r"\s*public var customPlaygroundQuickLook:\s*PlaygroundQuickLook\s*\{\s*\n"
+            r"\s*return\s+\.text\(description\)\s*\n"
+            r"\s*\}\s*\n"
+            r"\}",
+        ),
+        (
+            "extension RecordSet: CustomPlaygroundDisplayConvertible {\n"
+            "  public var playgroundDescription: Any {\n"
+            "    return description\n"
+            "  }\n"
+            "}"
+        ),
+    ),
+    # Apollo's GroupedSequenceIterator hard-codes the Swift-4 enumerated-iterator
+    # type; type-erase with AnyIterator so it works regardless of Swift mode.
+    (
+        "Pods/Apollo/Sources/Apollo/Collections.swift",
+        re.compile(
+            r"private var keyIterator:\s*"
+            r"(?:EnumeratedSequence<Array<Key>>\.Iterator"
+            r"|EnumeratedIterator<IndexingIterator<Array<Key>>>)"
+        ),
+        "private var keyIterator: AnyIterator<(offset: Int, element: Key)>",
+    ),
+    (
+        "Pods/Apollo/Sources/Apollo/Collections.swift",
+        re.compile(r"keyIterator\s*=\s*base\.keys\.enumerated\(\)\.makeIterator\(\)"),
+        "keyIterator = AnyIterator(base.keys.enumerated().makeIterator())",
+    ),
+)
+
+# Swift 4 → 5 type/constant renames applied across all pod sources.
+_POD_SWIFT_RENAMES: tuple[tuple["re.Pattern[str]", str], ...] = tuple(
+    (re.compile(rf"\b{old}\b"), new)
+    for old, new in (
+        # Foundation
+        ("NSAttributedStringKey", "NSAttributedString.Key"),
+        ("NSLayoutRelation", "NSLayoutConstraint.Relation"),
+        ("NSLayoutAttribute", "NSLayoutConstraint.Attribute"),
+        ("NSLayoutFormatOptions", "NSLayoutConstraint.FormatOptions"),
+        # UIFont / UIFontDescriptor
+        ("UIFontDescriptorSymbolicTraits", "UIFontDescriptor.SymbolicTraits"),
+        ("UIFontWeight", "UIFont.Weight"),
+        # UIView
+        ("UIViewContentMode", "UIView.ContentMode"),
+        ("UIViewAnimationOptions", "UIView.AnimationOptions"),
+        ("UIViewAnimationCurve", "UIView.AnimationCurve"),
+        ("UIViewAutoresizing", "UIView.AutoresizingMask"),
+        # UIControl
+        ("UIControlState", "UIControl.State"),
+        ("UIControlEvents", "UIControl.Event"),
+        ("UIControlContentHorizontalAlignment", "UIControl.ContentHorizontalAlignment"),
+        ("UIControlContentVerticalAlignment", "UIControl.ContentVerticalAlignment"),
+        # UITableView / UITableViewCell
+        ("UITableViewRowAnimation", "UITableView.RowAnimation"),
+        ("UITableViewScrollPosition", "UITableView.ScrollPosition"),
+        ("UITableViewStyle", "UITableView.Style"),
+        ("UITableViewCellStyle", "UITableViewCell.CellStyle"),
+        ("UITableViewCellAccessoryType", "UITableViewCell.AccessoryType"),
+        ("UITableViewCellSelectionStyle", "UITableViewCell.SelectionStyle"),
+        ("UITableViewCellSeparatorStyle", "UITableViewCell.SeparatorStyle"),
+        ("UITableViewCellEditingStyle", "UITableViewCell.EditingStyle"),
+        # UIAlert
+        ("UIAlertActionStyle", "UIAlertAction.Style"),
+        ("UIAlertControllerStyle", "UIAlertController.Style"),
+        # UIPageViewController
+        (
+            "UIPageViewControllerNavigationOrientation",
+            "UIPageViewController.NavigationOrientation",
+        ),
+        (
+            "UIPageViewControllerNavigationDirection",
+            "UIPageViewController.NavigationDirection",
+        ),
+        (
+            "UIPageViewControllerTransitionStyle",
+            "UIPageViewController.TransitionStyle",
+        ),
+        (
+            "UIPageViewControllerSpineLocation",
+            "UIPageViewController.SpineLocation",
+        ),
+        # UIButton / UIBarButtonItem
+        ("UIButtonType", "UIButton.ButtonType"),
+        ("UIBarButtonSystemItem", "UIBarButtonItem.SystemItem"),
+        ("UIBarButtonItemStyle", "UIBarButtonItem.Style"),
+        # UIImage
+        ("UIImageOrientation", "UIImage.Orientation"),
+        ("UIImageRenderingMode", "UIImage.RenderingMode"),
+        ("UIImageResizingMode", "UIImage.ResizingMode"),
+        # Misc UIKit
+        ("UIActivityIndicatorViewStyle", "UIActivityIndicatorView.Style"),
+        ("UIScrollViewKeyboardDismissMode", "UIScrollView.KeyboardDismissMode"),
+        ("UITextFieldViewMode", "UITextField.ViewMode"),
+        ("UITextBorderStyle", "UITextField.BorderStyle"),
+        ("UIBlurEffectStyle", "UIBlurEffect.Style"),
+        ("NSTextStorageEditActions", "NSTextStorage.EditActions"),
+        ("UIImpactFeedbackStyle", "UIImpactFeedbackGenerator.FeedbackStyle"),
+        # CoreAnimation
+        ("kCATransitionFromLeft", "CATransitionSubtype.fromLeft"),
+        ("kCATransitionFromRight", "CATransitionSubtype.fromRight"),
+        ("kCATransitionFromTop", "CATransitionSubtype.fromTop"),
+        ("kCATransitionFromBottom", "CATransitionSubtype.fromBottom"),
+        ("kCATransitionFade", "CATransitionType.fade"),
+        ("kCATransitionMoveIn", "CATransitionType.moveIn"),
+        ("kCATransitionPush", "CATransitionType.push"),
+        ("kCATransitionReveal", "CATransitionType.reveal"),
+        ("kCAFillModeForwards", "CAMediaTimingFillMode.forwards"),
+        ("kCAFillModeBackwards", "CAMediaTimingFillMode.backwards"),
+        ("kCAFillModeBoth", "CAMediaTimingFillMode.both"),
+        ("kCAFillModeRemoved", "CAMediaTimingFillMode.removed"),
+        # UIKeyboard userInfo
+        (
+            "UIKeyboardFrameBeginUserInfoKey",
+            "UIResponder.keyboardFrameBeginUserInfoKey",
+        ),
+        (
+            "UIKeyboardFrameEndUserInfoKey",
+            "UIResponder.keyboardFrameEndUserInfoKey",
+        ),
+        (
+            "UIKeyboardAnimationDurationUserInfoKey",
+            "UIResponder.keyboardAnimationDurationUserInfoKey",
+        ),
+        (
+            "UIKeyboardAnimationCurveUserInfoKey",
+            "UIResponder.keyboardAnimationCurveUserInfoKey",
+        ),
+        (
+            "UIKeyboardIsLocalUserInfoKey",
+            "UIResponder.keyboardIsLocalUserInfoKey",
+        ),
+        # UIPageViewController options
+        (
+            "UIPageViewControllerOptionInterPageSpacingKey",
+            "UIPageViewController.OptionsKey.interPageSpacing",
+        ),
+        (
+            "UIPageViewControllerOptionSpineLocationKey",
+            "UIPageViewController.OptionsKey.spineLocation",
+        ),
+        ("kCAGravityCenter", "CALayerContentsGravity.center"),
+        ("kCAGravityTop", "CALayerContentsGravity.top"),
+        ("kCAGravityBottom", "CALayerContentsGravity.bottom"),
+        ("kCAGravityLeft", "CALayerContentsGravity.left"),
+        ("kCAGravityRight", "CALayerContentsGravity.right"),
+        ("kCAGravityTopLeft", "CALayerContentsGravity.topLeft"),
+        ("kCAGravityTopRight", "CALayerContentsGravity.topRight"),
+        ("kCAGravityBottomLeft", "CALayerContentsGravity.bottomLeft"),
+        ("kCAGravityBottomRight", "CALayerContentsGravity.bottomRight"),
+        ("kCAGravityResize", "CALayerContentsGravity.resize"),
+        ("kCAGravityResizeAspect", "CALayerContentsGravity.resizeAspect"),
+        ("kCAGravityResizeAspectFill", "CALayerContentsGravity.resizeAspectFill"),
+    )
+)
+
+# Notification names; the leading `.` or `NSNotification.Name.` prefix is
+# absorbed by the pattern so the rewrite drops it.
+_POD_SWIFT_NOTIFICATION_RENAMES: tuple[tuple["re.Pattern[str]", str], ...] = tuple(
+    (
+        re.compile(rf"(?:\bNSNotification\.Name\.|\.){old}\b"),
+        new,
+    )
+    for old, new in (
+        # UIApplication
+        (
+            "UIApplicationDidReceiveMemoryWarning",
+            "UIApplication.didReceiveMemoryWarningNotification",
+        ),
+        (
+            "UIApplicationDidEnterBackground",
+            "UIApplication.didEnterBackgroundNotification",
+        ),
+        (
+            "UIApplicationWillEnterForeground",
+            "UIApplication.willEnterForegroundNotification",
+        ),
+        ("UIApplicationDidBecomeActive", "UIApplication.didBecomeActiveNotification"),
+        ("UIApplicationWillResignActive", "UIApplication.willResignActiveNotification"),
+        (
+            "UIApplicationDidFinishLaunching",
+            "UIApplication.didFinishLaunchingNotification",
+        ),
+        ("UIApplicationWillTerminate", "UIApplication.willTerminateNotification"),
+        (
+            "UIApplicationSignificantTimeChange",
+            "UIApplication.significantTimeChangeNotification",
+        ),
+        (
+            "UIApplicationBackgroundRefreshStatusDidChange",
+            "UIApplication.backgroundRefreshStatusDidChangeNotification",
+        ),
+        (
+            "UIApplicationProtectedDataWillBecomeUnavailable",
+            "UIApplication.protectedDataWillBecomeUnavailableNotification",
+        ),
+        (
+            "UIApplicationProtectedDataDidBecomeAvailable",
+            "UIApplication.protectedDataDidBecomeAvailableNotification",
+        ),
+        (
+            "UIApplicationUserDidTakeScreenshot",
+            "UIApplication.userDidTakeScreenshotNotification",
+        ),
+        # UIDevice
+        (
+            "UIDeviceOrientationDidChange",
+            "UIDevice.orientationDidChangeNotification",
+        ),
+        # UIKeyboard
+        ("UIKeyboardWillShow", "UIResponder.keyboardWillShowNotification"),
+        ("UIKeyboardDidShow", "UIResponder.keyboardDidShowNotification"),
+        ("UIKeyboardWillHide", "UIResponder.keyboardWillHideNotification"),
+        ("UIKeyboardDidHide", "UIResponder.keyboardDidHideNotification"),
+        (
+            "UIKeyboardWillChangeFrame",
+            "UIResponder.keyboardWillChangeFrameNotification",
+        ),
+        (
+            "UIKeyboardDidChangeFrame",
+            "UIResponder.keyboardDidChangeFrameNotification",
+        ),
+    )
+)
+
+# Swift 4→5 renames whose callsites need custom regexes.  Order matters: more
+# specific patterns must precede their shorthand counterparts.
+_POD_SWIFT_PATTERN_RENAMES: tuple[tuple["re.Pattern[str]", str], ...] = (
+    (
+        re.compile(
+            r"\bUIAccessibilityPostNotification\s*\(\s*"
+            r"UIAccessibilityAnnouncementNotification\s*,\s*"
+        ),
+        "UIAccessibility.post(notification: .announcement, argument: ",
+    ),
+    (re.compile(r"\bremoveFromParentViewController\s*\(\s*\)"), "removeFromParent()"),
+    (re.compile(r"\baddChildViewController\s*\("), "addChild("),
+    (
+        re.compile(r"\bdidMove\s*\(\s*toParentViewController\s*:"),
+        "didMove(toParent:",
+    ),
+    (re.compile(r"\.sendSubview\s*\(\s*toBack\s*:"), ".sendSubviewToBack("),
+    (re.compile(r"\.bringSubview\s*\(\s*toFront\s*:"), ".bringSubviewToFront("),
+    (re.compile(r"\bRunLoopMode\.commonModes\b"), "RunLoop.Mode.common"),
+    (re.compile(r"\bRunLoopMode\b(?!\.commonModes\b)"), "RunLoop.Mode"),
+    (re.compile(r"\.commonModes\b"), ".common"),
+    # `let` is implicitly final, so `open let` is never legal Swift.
+    (re.compile(r"\bopen(\s+let\b)"), r"public\1"),
+    # Same for `static` declarations.
+    (re.compile(r"\bopen(\s+static\b)"), r"public\1"),
+    # String.characters was removed; String itself is the Collection.
+    (re.compile(r"\.characters\b"), ""),
+)
+
+# Top-level UIAccessibility C functions → properties; callsite drops the `()`.
+_POD_SWIFT_FUNC_TO_PROP: tuple[tuple["re.Pattern[str]", str], ...] = tuple(
+    (re.compile(rf"\b{old}\(\)"), new)
+    for old, new in (
+        ("UIAccessibilityIsVoiceOverRunning", "UIAccessibility.isVoiceOverRunning"),
+        (
+            "UIAccessibilityIsSwitchControlRunning",
+            "UIAccessibility.isSwitchControlRunning",
+        ),
+        (
+            "UIAccessibilityIsAssistiveTouchRunning",
+            "UIAccessibility.isAssistiveTouchRunning",
+        ),
+        ("UIAccessibilityIsMonoAudioEnabled", "UIAccessibility.isMonoAudioEnabled"),
+        (
+            "UIAccessibilityIsClosedCaptioningEnabled",
+            "UIAccessibility.isClosedCaptioningEnabled",
+        ),
+        (
+            "UIAccessibilityIsInvertColorsEnabled",
+            "UIAccessibility.isInvertColorsEnabled",
+        ),
+        (
+            "UIAccessibilityIsGuidedAccessEnabled",
+            "UIAccessibility.isGuidedAccessEnabled",
+        ),
+        ("UIAccessibilityIsBoldTextEnabled", "UIAccessibility.isBoldTextEnabled"),
+        ("UIAccessibilityIsGrayscaleEnabled", "UIAccessibility.isGrayscaleEnabled"),
+        (
+            "UIAccessibilityIsReduceTransparencyEnabled",
+            "UIAccessibility.isReduceTransparencyEnabled",
+        ),
+        (
+            "UIAccessibilityIsReduceMotionEnabled",
+            "UIAccessibility.isReduceMotionEnabled",
+        ),
+        (
+            "UIAccessibilityIsDarkerSystemColorsEnabled",
+            "UIAccessibility.isDarkerSystemColorsEnabled",
+        ),
+        (
+            "UIAccessibilityIsSpeakSelectionEnabled",
+            "UIAccessibility.isSpeakSelectionEnabled",
+        ),
+        (
+            "UIAccessibilityIsSpeakScreenEnabled",
+            "UIAccessibility.isSpeakScreenEnabled",
+        ),
+        (
+            "UIAccessibilityIsShakeToUndoEnabled",
+            "UIAccessibility.isShakeToUndoEnabled",
+        ),
+    )
+)
+
+# Pods/ holds remote-spec pods; Local Pods/ holds :path => vendored pods.
+_POD_SOURCE_ROOTS: tuple[str, ...] = ("Pods", "Local Pods")
+
+
+def _write_patched_source(path: Path, content: str) -> None:
+    """Write *content*, restoring the original mode if it was read-only (0444 pods)."""
+    try:
+        path.write_text(content)
+    except PermissionError:
+        original_mode = path.stat().st_mode
+        path.chmod(original_mode | 0o200)
+        try:
+            path.write_text(content)
+        finally:
+            path.chmod(original_mode)
+
+
+def _strip_stray_info_plist_from_pods_project(work_dir: Path) -> None:
+    """Remove bogus ``Info.plist in Sources`` entries from Pods.xcodeproj.
+
+    Some podspecs glob their framework ``Info.plist`` into the target's Sources
+    phase; xcodebuild then emits two ``ProcessInfoPlistFile`` tasks for the
+    same output and aborts with ``error: Unexpected duplicate tasks``.  The
+    canonical ``INFOPLIST_FILE`` from Target Support Files is untouched.
+    """
+    pbx_path = work_dir / "Pods" / "Pods.xcodeproj" / PROJECT_PBXPROJ
+    if not pbx_path.exists():
+        return
+    pbx = pbx_path.read_text()
+
+    # CocoaPods emits 32-char UUIDs, Xcode emits 24-char.
+    build_file_line = re.compile(
+        r"^\t+(\w{24,32}) /\* Info\.plist in Sources \*/ = \{[^}]*\};\n",
+        re.MULTILINE,
+    )
+    stray_uuids = [m.group(1) for m in build_file_line.finditer(pbx)]
+    if not stray_uuids:
+        return
+
+    patched = build_file_line.sub("", pbx)
+    for uuid in stray_uuids:
+        phase_line = re.compile(
+            rf"^\t+{uuid} /\* Info\.plist in Sources \*/,\n", re.MULTILINE
+        )
+        patched = phase_line.sub("", patched)
+
+    if patched != pbx:
+        _write_patched_source(pbx_path, patched)
+        logger.info(
+            "Stripped %d stray Info.plist build-file entries from Pods.xcodeproj",
+            len(stray_uuids),
+        )
+
+
+# xcodebuild "X has been renamed/replaced by Y" diagnostics.
+_RENAME_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: '(?P<old>[^']+)' "
+    r"(?:has been renamed to|has been replaced by(?: property)?) "
+    r"'(?P<new>[^']+)'",
+    re.MULTILINE,
+)
+
+# "<decl-kind> are implicitly 'final'; use 'X' instead of 'open'" — column points at `open`.
+_IMPLICIT_FINAL_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: [^\n]*implicitly 'final'; use '(?P<modifier>\w+)' instead of 'open'",
+    re.MULTILINE,
+)
+
+# "'X' is unavailable: <hint>" — only known fix-able instance is String.characters.
+_UNAVAILABLE_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: '(?P<symbol>[^']+)' is unavailable[^\n]*",
+    re.MULTILINE,
+)
+
+# "binary operator '|=' cannot be applied" — OptionSet types lost their
+# bitwise operators in Swift 5+.  Use the equivalent set-mutation method.
+_OPSET_OPERATOR_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: binary operator '(?P<op>\|=|&=)' cannot be applied",
+    re.MULTILINE,
+)
+
+_OPSET_OPERATOR_METHOD = {"|=": "formUnion", "&=": "formIntersection"}
+
+# "using '!' is not allowed here" — Swift 5+ rejects implicitly-unwrapped types
+# in cast/generic positions.  Column points at the `!`; drop it.
+_BANG_NOT_ALLOWED_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: using '!' is not allowed here",
+    re.MULTILINE,
+)
+
+# "switch must be exhaustive" — Swift 5 requires @unknown default for
+# non-frozen system enums.  Line points at the `switch` keyword.
+_NONEXHAUSTIVE_SWITCH_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: switch must be exhaustive",
+    re.MULTILINE,
+)
+
+# "'X' is not overridable; did you mean to override 'Y'?" — diagnostic names
+# the correct member.  Rewrite the old member's last name → new on the cited line.
+_NOT_OVERRIDABLE_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: '(?P<old>[^']+)' is not overridable; "
+    r"did you mean to override '(?P<new>[^']+)'\?",
+    re.MULTILINE,
+)
+
+
+def _split_callable_name(name: str) -> tuple[str, str | None]:
+    """Split ``foo(bar:)`` → (``foo``, ``bar:``); plain identifier → (name, None)."""
+    m = re.match(r"^([\w.]+)\((.*)\)$", name)
+    if not m:
+        return name, None
+    return m.group(1), m.group(2)
+
+
+def _build_rename_replacements(
+    old: str, new: str
+) -> list[tuple["re.Pattern[str]", str]]:
+    """Build regex rewrites for one rename diagnostic; multiple shapes possible."""
+    old_base, old_args = _split_callable_name(old)
+    new_base, new_args = _split_callable_name(new)
+
+    # OldFn(a, b) → Type(label1: a, label2: b) for C-style "Make" constructors.
+    if old_args is None and new_base.endswith(".init") and new_args:
+        type_name = new_base[: -len(".init")]
+        labels = [lbl.rstrip(":") for lbl in new_args.split(":") if lbl]
+        if labels:
+            arg_group = ",".join([r"\s*([^,)]+)"] * len(labels))
+            pattern = re.compile(rf"\b{re.escape(old)}\s*\({arg_group}\s*\)")
+            replacement = (
+                f"{type_name}("
+                + ", ".join(f"{lbl}: \\{i + 1}" for i, lbl in enumerate(labels))
+                + ")"
+            )
+            return [(pattern, replacement)]
+
+    # foo() → Bar.foo (function-to-property)
+    if old_args == "" and new_args is None:
+        return [(re.compile(rf"\b{re.escape(old_base)}\(\)"), new_base)]
+
+    # bringSubview(toFront:) → bringSubviewToFront(_:) — rewrite method head only.
+    if old_args is not None and new_args is not None:
+        old_method = old_base.rsplit(".", 1)[-1]
+        new_method = new_base.rsplit(".", 1)[-1]
+        return [
+            (
+                re.compile(rf"\.{re.escape(old_method)}\s*\(\s*"),
+                f".{new_method}(",
+            )
+        ]
+
+    # Renames whose new name is a nested path (`A.B[.C]`): the old form is
+    # often referenced via shorthand member access (`.X`) or a now-renamed
+    # parent prefix (`OldType.X`, `NSNotification.Name.X`).  Eat that prefix so
+    # the rewrite doesn't leave a stray leading `.` (`.RunLoop.Mode.tracking`).
+    if "." in new:
+        return [
+            (re.compile(rf"(?:\bNSNotification\.Name\.|\.){re.escape(old)}\b"), new),
+            (re.compile(rf"\b{re.escape(old)}\b"), new),
+        ]
+
+    return [(re.compile(rf"\b{re.escape(old)}\b"), new)]
+
+
+_OPEN_KEYWORD = re.compile(r"\bopen\b")
+_DOT_CHARACTERS = re.compile(r"\.characters\b")
+
+
+def _replace_on_line(
+    content: str, line_no: int, pattern: "re.Pattern[str]", replacement: str
+) -> str:
+    """Apply *pattern* → *replacement* (count=1) on the 1-based *line_no*."""
+    lines = content.split("\n")
+    if 1 <= line_no <= len(lines):
+        lines[line_no - 1] = pattern.sub(replacement, lines[line_no - 1], count=1)
+    return "\n".join(lines)
+
+
+def _add_unknown_default(content: str, switch_line_no: int) -> str:
+    """Insert ``@unknown default: break`` before the close brace of the switch on *switch_line_no*."""
+    lines = content.split("\n")
+    if not (1 <= switch_line_no <= len(lines)):
+        return content
+    if "@unknown default" in lines[switch_line_no - 1]:
+        return content
+
+    # Walk forward counting braces from the `switch` line until we close the body.
+    depth = 0
+    seen_open = False
+    for idx in range(switch_line_no - 1, len(lines)):
+        line = lines[idx]
+        for ch in line:
+            if ch == "{":
+                depth += 1
+                seen_open = True
+            elif ch == "}":
+                depth -= 1
+                if seen_open and depth == 0:
+                    if any(
+                        "@unknown default" in lines[i]
+                        for i in range(switch_line_no - 1, idx + 1)
+                    ):
+                        return content
+                    case_indent = re.match(r"[ \t]*", lines[idx]).group(0)
+                    body_indent = case_indent + "    "
+                    lines[idx:idx] = [
+                        f"{case_indent}@unknown default:",
+                        f"{body_indent}break",
+                    ]
+                    return "\n".join(lines)
+    return content
+
+
+def _apply_compiler_fixits(xcodebuild_output: str, work_dir: Path) -> int:
+    """Apply rename / implicit-final / unavailable fix-its from a build log."""
+
+    file_state: dict[Path, str] = {}
+
+    def load(raw_path: str) -> tuple[Path, str] | None:
+        path = Path(raw_path)
+        try:
+            path.relative_to(work_dir)
+        except ValueError:
+            return None
+        if path not in file_state:
+            if not path.exists():
+                return None
+            file_state[path] = path.read_text()
+        return path, file_state[path]
+
+    for m in _RENAME_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, content = loaded
+        for pat, rep in _build_rename_replacements(m.group("old"), m.group("new")):
+            content = pat.sub(rep, content)
+        file_state[path] = content
+
+    for m in _IMPLICIT_FINAL_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, content = loaded
+        file_state[path] = _replace_on_line(
+            content, int(m.group("line")), _OPEN_KEYWORD, m.group("modifier")
+        )
+
+    for m in _UNAVAILABLE_DIAGNOSTIC.finditer(xcodebuild_output):
+        if m.group("symbol") != "characters":
+            continue
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, content = loaded
+        file_state[path] = _replace_on_line(
+            content, int(m.group("line")), _DOT_CHARACTERS, ""
+        )
+
+    for m in _OPSET_OPERATOR_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, content = loaded
+        op = m.group("op")
+        method = _OPSET_OPERATOR_METHOD[op]
+        # Rewrite ` lhs OP= rhs` → ` lhs.method(rhs)` on the cited line.
+        line_pat = re.compile(
+            rf"(\b\w+(?:\.\w+)*)\s*{re.escape(op)}\s*([^\n]+?)(\s*(?://[^\n]*)?)$"
+        )
+        file_state[path] = _replace_on_line(
+            content, int(m.group("line")), line_pat, rf"\1.{method}(\2)\3"
+        )
+
+    for m in _BANG_NOT_ALLOWED_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, content = loaded
+        line_no, col = int(m.group("line")), int(m.group("col"))
+        lines = content.split("\n")
+        if 1 <= line_no <= len(lines):
+            line = lines[line_no - 1]
+            idx = col - 1
+            # Replace `!` with `?` to preserve the optional type rather than
+            # deleting it (which can leave `as CFString` failing to coerce a
+            # `String?` LHS).
+            if 0 <= idx < len(line) and line[idx] == "!":
+                lines[line_no - 1] = line[:idx] + "?" + line[idx + 1 :]
+                file_state[path] = "\n".join(lines)
+
+    for m in _NONEXHAUSTIVE_SWITCH_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, content = loaded
+        file_state[path] = _add_unknown_default(content, int(m.group("line")))
+
+    for m in _NOT_OVERRIDABLE_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, content = loaded
+        old_member = m.group("old").rsplit(".", 1)[-1]
+        new_member = m.group("new").rsplit(".", 1)[-1]
+        file_state[path] = _replace_on_line(
+            content,
+            int(m.group("line")),
+            re.compile(rf"\b{re.escape(old_member)}\b"),
+            new_member,
+        )
+
+    modified = 0
+    for path, new_content in file_state.items():
+        original = path.read_text()
+        if new_content != original:
+            _write_patched_source(path, new_content)
+            logger.info("Auto-applied fix-its to %s", path.relative_to(work_dir))
+            modified += 1
+    return modified
+
+
+_PAGE_LEGACY_OPTIONS_ELSE = re.compile(
+    r"#else\n"
+    r"((?:[ \t]*///[^\n]*\n)*)"
+    r"([ \t]*)var pageViewControllerOptions: \[String:\s*Any\]\? \{"
+    r".*?"
+    r"\n\2\}\n(?=\s*#endif)",
+    re.DOTALL,
+)
+
+
+def _patch_pageboy_management_swift(content: str) -> str:
+    """Rewrite Pageboy's legacy ``#else`` options branch.
+
+    Swift 6 type-checks inactive ``#if`` branches, so the legacy
+    ``[String: Any]`` + option-key-string path also has to compile.
+    """
+
+    def _repl_else(m: re.Match[str]) -> str:
+        doc, ind = m.group(1), m.group(2)
+        inner = (
+            f"{ind}    var options = [UIPageViewController.OptionsKey: Any]()\n"
+            f"{ind}    \n"
+            f"{ind}    if interPageSpacing > 0.0 {{\n"
+            f"{ind}        options[.interPageSpacing] = interPageSpacing\n"
+            f"{ind}    }}\n"
+            f"{ind}    \n"
+            f"{ind}    guard options.count > 0 else {{\n"
+            f"{ind}        return nil\n"
+            f"{ind}    }}\n"
+            f"{ind}    return options\n"
+        )
+        return (
+            f"#else\n{doc}{ind}var pageViewControllerOptions: "
+            f"[UIPageViewController.OptionsKey: Any]? {{\n{inner}{ind}}}\n"
+        )
+
+    return _PAGE_LEGACY_OPTIONS_ELSE.sub(_repl_else, content)
+
+
+def _patch_pod_sources(work_dir: Path) -> None:
+    """Apply source patches to pinned pod versions incompatible with modern Swift."""
+    for rel_path, pattern, replacement in _POD_SOURCE_PATCHES:
+        path = work_dir / rel_path
+        if not path.exists():
+            continue
+        content = path.read_text()
+        patched = pattern.sub(replacement, content)
+        if patched != content:
+            _write_patched_source(path, patched)
+            logger.info("Patched pod source: %s", rel_path)
+
+    for root_rel in _POD_SOURCE_ROOTS:
+        root_dir = work_dir / root_rel
+        if not root_dir.is_dir():
+            continue
+        for swift_file in root_dir.rglob("*.swift"):
+            content = swift_file.read_text()
+            patched = content
+            if (
+                swift_file.name == "PageboyViewController+Management.swift"
+                and "Pageboy" in swift_file.parts
+            ):
+                patched = _patch_pageboy_management_swift(patched)
+            for pattern, replacement in _POD_SWIFT_RENAMES:
+                patched = pattern.sub(replacement, patched)
+            for pattern, replacement in _POD_SWIFT_FUNC_TO_PROP:
+                patched = pattern.sub(replacement, patched)
+            for pattern, replacement in _POD_SWIFT_NOTIFICATION_RENAMES:
+                patched = pattern.sub(replacement, patched)
+            for pattern, replacement in _POD_SWIFT_PATTERN_RENAMES:
+                patched = pattern.sub(replacement, patched)
+            if patched != content:
+                _write_patched_source(swift_file, patched)
+                logger.debug("Applied Swift renames to %s", swift_file)
+
+    _strip_stray_info_plist_from_pods_project(work_dir)
+
+
 def _lookup_pbx_target_uuid(pbx: str, target_name: str) -> str | None:
     """Return the 24-char UUID of a PBXNativeTarget named *target_name*."""
     if not target_name:
@@ -257,13 +1119,10 @@ def _ensure_shared_scheme(
     scheme_name: str,
     test_target: str = "",
 ) -> None:
-    """Ensure a shared ``<scheme_name>.xcscheme`` exists in the main project.
+    """Generate a minimal shared ``<scheme_name>.xcscheme`` if missing.
 
-    Some repos only commit user-local schemes (in ``xcuserdata``) while
-    xcodebuild requires a shared scheme file to build from the command line.
-    When the configured scheme is missing from ``xcshareddata/xcschemes``,
-    generate a minimal shared scheme pointing at the target with the same
-    name, optionally listing *test_target* as a testable reference.
+    Repos that only commit user-local schemes (xcuserdata) can't be driven by
+    xcodebuild; this synthesises a shared scheme pointing at the same target.
     """
     if not scheme_name:
         return
@@ -552,7 +1411,14 @@ class XcodeBuildCache:
             ]
         )
 
+        _patch_podfile_build_settings(
+            work_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET, _MIN_SWIFT_VERSION
+        )
+        _bump_main_project_min_ios(
+            xcode_config, work_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET
+        )
         _run_pre_build_commands(xcode_config, work_dir)
+        _patch_pod_sources(work_dir)
         _ensure_shared_scheme(
             xcode_config, work_dir, xcode_config.get(XCODE_CONFIG_SCHEME, "")
         )
@@ -587,6 +1453,19 @@ class XcodeBuildCache:
                 )
                 resolve_cmd = _build_resolve_packages_cmd(xcode_config, work_dir)
                 _run_xcodebuild(resolve_cmd, str(work_dir), build_timeout)
+                result = _run_xcodebuild(build_cmd, str(work_dir), build_timeout)
+
+            # Loop: each pass can expose new "renamed to" diagnostics.
+            for _ in range(_RENAME_FIXIT_MAX_PASSES):
+                if result.returncode == 0:
+                    break
+                modified = _apply_compiler_fixits(
+                    (result.stdout or "") + "\n" + (result.stderr or ""), work_dir
+                )
+                if not modified:
+                    break
+                shutil.rmtree(dd_dir, ignore_errors=True)
+                dd_dir.mkdir(parents=True, exist_ok=True)
                 result = _run_xcodebuild(build_cmd, str(work_dir), build_timeout)
 
             if result.returncode != 0:
@@ -892,7 +1771,14 @@ class XcodeBuildCache:
 
         if xcode_config:
             if run_pre_build:
+                _patch_podfile_build_settings(
+                    target_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET, _MIN_SWIFT_VERSION
+                )
+                _bump_main_project_min_ios(
+                    xcode_config, target_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET
+                )
                 _run_pre_build_commands(xcode_config, target_dir)
+                _patch_pod_sources(target_dir)
             self._restore_package_resolved(
                 xcode_config, repo_name, base_commit, target_dir
             )
