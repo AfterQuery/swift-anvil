@@ -287,6 +287,21 @@ _POD_SOURCE_PATCHES: tuple[tuple[str, "re.Pattern[str]", str], ...] = (
         re.compile(r"(NSAttributedString\.Key\.\w+)\.rawValue\b"),
         r"\1",
     ),
+    # Old Apollo codegen lists `RawRepresentable, Equatable` without `Hashable`;
+    # Swift 5+ no longer auto-synthesises Hashable from RawRepresentable.
+    (
+        "gql/API.swift",
+        re.compile(r"(\benum\s+\w+\s*:\s*RawRepresentable,\s*Equatable,)"),
+        r"\1 Hashable,",
+    ),
+    # Older Apollo codegen used `enum X: String` plain.  The auto-Hashable
+    # synthesis can fail when an extension later adds Apollo protocols, so
+    # declare it explicitly.
+    (
+        "gql/API.swift",
+        re.compile(r"(\benum\s+\w+\s*:\s*String)\s*\{"),
+        r"\1, Hashable {",
+    ),
     # Apollo's playground display extension uses unavailable Swift 4 protocol.
     (
         "Pods/Apollo/Sources/Apollo/RecordSet.swift",
@@ -655,11 +670,16 @@ def _strip_stray_info_plist_from_pods_project(work_dir: Path) -> None:
         )
 
 
-# xcodebuild "X has been renamed/replaced by Y" diagnostics.
+# xcodebuild "X has been renamed/replaced by Y" diagnostics, plus the
+# deprecation-as-error variant some build configs emit.
 _RENAME_DIAGNOSTIC = re.compile(
     r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
     r"error: '(?P<old>[^']+)' "
-    r"(?:has been renamed to|has been replaced by(?: property)?) "
+    r"(?:"
+    r"has been renamed to"
+    r"|has been replaced by(?: property)?"
+    r"|is deprecated:.* use"
+    r") "
     r"'(?P<new>[^']+)'",
     re.MULTILINE,
 )
@@ -898,12 +918,20 @@ def _apply_compiler_fixits(xcodebuild_output: str, work_dir: Path) -> int:
                 lines[line_no - 1] = line[:idx] + "?" + line[idx + 1 :]
                 file_state[path] = "\n".join(lines)
 
+    # Group switch diagnostics by file and apply descending — each insertion
+    # adds lines, so processing in source order would shift later line numbers.
+    switch_by_file: dict[Path, list[int]] = {}
     for m in _NONEXHAUSTIVE_SWITCH_DIAGNOSTIC.finditer(xcodebuild_output):
         loaded = load(m.group("file"))
         if loaded is None:
             continue
-        path, content = loaded
-        file_state[path] = _add_unknown_default(content, int(m.group("line")))
+        path, _ = loaded
+        switch_by_file.setdefault(path, []).append(int(m.group("line")))
+    for path, line_nos in switch_by_file.items():
+        content = file_state[path]
+        for ln in sorted(set(line_nos), reverse=True):
+            content = _add_unknown_default(content, ln)
+        file_state[path] = content
 
     for m in _NOT_OVERRIDABLE_DIAGNOSTIC.finditer(xcodebuild_output):
         loaded = load(m.group("file"))
