@@ -68,12 +68,10 @@ def _apfs_clone(src: Path, dst: Path) -> None:
 
 
 def _dd_is_populated(path: Path) -> bool:
-    """Return True if *path* exists and contains at least one entry."""
     return path.exists() and any(path.iterdir())
 
 
 def _clone_dd_if_populated(src: Path, dst: Path) -> None:
-    """APFS-clone a DerivedData directory if it has content."""
     if _dd_is_populated(src):
         _apfs_clone(src, dst)
 
@@ -107,8 +105,13 @@ def _format_build_errors(
 
 def _is_package_resolution_failure(stdout: str, stderr: str) -> bool:
     """Return True when xcodebuild failed during SwiftPM dependency resolution."""
-    needle = "could not resolve package dependencies"
-    return needle in stdout.lower() or needle in stderr.lower()
+    combined = (stdout or "").lower() + (stderr or "").lower()
+    markers = (
+        "could not resolve package dependencies",
+        "failed to resolve package dependencies",
+        "unable to resolve package dependencies",
+    )
+    return any(m in combined for m in markers)
 
 
 def _default_cache_root() -> Path:
@@ -144,6 +147,20 @@ def _run_pre_build_commands(xcode_config: dict, work_dir: Path) -> None:
                 cmd,
                 result.stderr[-500:],
             )
+
+
+def _maybe_init_git_submodules(work_dir: Path) -> None:
+    """Run ``git submodule update --init --recursive`` if ``.gitmodules`` exists."""
+    if not (work_dir / ".gitmodules").is_file():
+        return
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    _apply_swiftpm_git_github_auth(env)
+    typer.echo("  Initializing git submodules...")
+    _run_cmd(
+        ["git", "-C", str(work_dir), "submodule", "update", "--init", "--recursive"],
+        env=env,
+    )
 
 
 # Xcode 15+ dropped libarclite (needed for iOS < 12) and Swift 4 support.
@@ -671,6 +688,14 @@ def _strip_stray_info_plist_from_pods_project(work_dir: Path) -> None:
         )
 
 
+# Swift 6+: `import SwiftUICore` is rejected; use `import SwiftUI`.
+_SWIFTUICORE_IMPORT_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: module 'SwiftUICore' is an implementation detail of 'SwiftUI'; "
+    r"import 'SwiftUI' instead",
+    re.MULTILINE,
+)
+
 # xcodebuild "X has been renamed/replaced by Y" diagnostics, plus the
 # deprecation-as-error variant some build configs emit.
 _RENAME_DIAGNOSTIC = re.compile(
@@ -734,6 +759,36 @@ _NOT_OVERRIDABLE_DIAGNOSTIC = re.compile(
     re.MULTILINE,
 )
 
+# "type 'X' does not conform to protocol 'Hashable'" — Apollo-codegen enums
+# declare RawRepresentable/Equatable but pre-Swift-5 relied on implicit Hashable
+# synthesis; modern Swift requires explicit conformance on the type.
+_HASHABLE_CONFORMANCE_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: type '(?P<type>\w+)' does not conform to protocol 'Hashable'",
+    re.MULTILINE,
+)
+
+# "cannot convert value of type 'String' to expected argument type 'NSAttributedString.Key'"
+# — older pods used `NSAttributedString.Key.X.rawValue` as dict keys before the
+# dict type became `[NSAttributedString.Key: Any]`.  Drop the trailing `.rawValue`.
+_NSATTR_KEY_CONVERSION_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: cannot convert value of type 'String' to expected (?:argument|dictionary key) type "
+    r"'NSAttributedString\.Key'",
+    re.MULTILINE,
+)
+
+# "'self' used before 'super.init' call" — Swift 5+ rejects passing `self` as
+# an argument to super.init.  We hoist `<param>: self` out of the super.init
+# call into a post-call assignment.  The fix only works when the parent class
+# exposes `<param>` as a settable property reachable from the subclass — we
+# can't verify that from a regex, so the patch may need a follow-up.
+_SELF_BEFORE_SUPER_INIT_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: 'self' used before 'super\.init' call",
+    re.MULTILINE,
+)
+
 
 def _split_callable_name(name: str) -> tuple[str, str | None]:
     """Split ``foo(bar:)`` → (``foo``, ``bar:``); plain identifier → (name, None)."""
@@ -794,6 +849,144 @@ def _build_rename_replacements(
 
 _OPEN_KEYWORD = re.compile(r"\bopen\b")
 _DOT_CHARACTERS = re.compile(r"\.characters\b")
+_NSATTR_KEY_RAWVALUE = re.compile(r"(NSAttributedString\.Key\.\w+)\.rawValue\b")
+
+
+def _add_hashable_conformance(content: str, type_name: str) -> str:
+    """Insert ``Hashable`` into the protocol list of ``enum/struct <type_name>``."""
+    decl_re = re.compile(
+        rf"(\b(?:enum|struct)\s+{re.escape(type_name)}\b\s*:\s*)([^{{]+?)(\s*\{{)"
+    )
+    m = decl_re.search(content)
+    if m is None:
+        return content
+    protocols = m.group(2)
+    if re.search(r"\bHashable\b", protocols):
+        return content
+    new_protocols = re.sub(
+        r"(\bRawRepresentable\s*,\s*Equatable\s*,)",
+        r"\1 Hashable,",
+        protocols,
+        count=1,
+    )
+    if new_protocols == protocols:
+        new_protocols = protocols.rstrip() + ", Hashable"
+    return (
+        content[: m.start()]
+        + m.group(1)
+        + new_protocols
+        + m.group(3)
+        + content[m.end() :]
+    )
+
+
+def _find_type_decl_file(work_dir: Path, type_name: str) -> Path | None:
+    """Locate the swift file that declares ``enum/struct <type_name>``."""
+    pattern = re.compile(rf"\b(?:enum|struct)\s+{re.escape(type_name)}\b\s*:")
+    for swift in work_dir.rglob("*.swift"):
+        try:
+            if pattern.search(swift.read_text()):
+                return swift
+        except (OSError, UnicodeDecodeError):
+            continue
+    return None
+
+
+def _hoist_self_from_super_init(content: str, error_line_no: int) -> str | None:
+    """Move ``<param>: self`` out of a ``super.init(...)`` call.
+
+    Returns the rewritten content, or ``None`` when the cited line doesn't
+    match the expected pattern.  The caller is responsible for separately
+    relaxing the parent class's property visibility if needed.
+    """
+    lines = content.split("\n")
+    if not (1 <= error_line_no <= len(lines)):
+        return None
+    arg_line = lines[error_line_no - 1]
+    arg_m = re.match(r"^(\s*)(\w+)\s*:\s*self\s*,?\s*$", arg_line)
+    if arg_m is None:
+        return None
+    param_name = arg_m.group(2)
+
+    super_idx = None
+    for idx in range(error_line_no - 2, max(-1, error_line_no - 30), -1):
+        if "super.init(" in lines[idx]:
+            super_idx = idx
+            break
+    if super_idx is None:
+        return None
+
+    depth = 0
+    close_idx = None
+    seen_open = False
+    for idx in range(super_idx, len(lines)):
+        for ch in lines[idx]:
+            if ch == "(":
+                depth += 1
+                seen_open = True
+            elif ch == ")":
+                depth -= 1
+                if seen_open and depth == 0:
+                    close_idx = idx
+                    break
+        if close_idx is not None:
+            break
+    if close_idx is None or not (super_idx <= error_line_no - 1 <= close_idx):
+        return None
+
+    del lines[error_line_no - 1]
+    prev = lines[error_line_no - 2]
+    if prev.rstrip().endswith(","):
+        trailing_ws = prev[len(prev.rstrip()) :]
+        lines[error_line_no - 2] = prev.rstrip()[:-1] + trailing_ws
+
+    close_idx -= 1
+    super_indent_m = re.match(r"^(\s*)", lines[super_idx])
+    super_indent = super_indent_m.group(1) if super_indent_m else ""
+    lines.insert(close_idx + 1, f"{super_indent}self.{param_name} = self")
+    return "\n".join(lines)
+
+
+def _relax_private_property(work_dir: Path, prop_name: str) -> None:
+    """Promote ``private weak var <prop_name>:`` to ``internal`` across the project.
+
+    Required when ``_hoist_self_from_super_init`` introduces an external
+    assignment to a property that the parent class still keeps ``private``.
+    """
+    pattern = re.compile(rf"\bprivate\b(\s+(?:weak\s+)?var\s+{re.escape(prop_name)}\b)")
+    for swift in work_dir.rglob("*.swift"):
+        try:
+            content = swift.read_text()
+        except (OSError, UnicodeDecodeError):
+            continue
+        new_content = pattern.sub(r"internal\1", content)
+        if new_content != content:
+            _write_patched_source(swift, new_content)
+
+
+def _make_init_param_optional(work_dir: Path, param_name: str) -> None:
+    """Make ``init(... <param_name>: <Type>)`` accept an optional ``Type? = nil``.
+
+    Required when ``_hoist_self_from_super_init`` drops a ``<param>: self``
+    argument from a super.init call: the parent's init still demands a value
+    for that parameter, so we relax it to optional with a nil default.  Only
+    files that contain ``self.<param> = <param>`` are touched, which biases
+    toward init bodies that store the param into a stored property.
+    """
+    init_param_re = re.compile(
+        rf"(\b{re.escape(param_name)}\b\s*:\s*[\w<>.]+)(?=\s*[,)])"
+    )
+    assignment = f"self.{param_name} = {param_name}"
+    for swift in work_dir.rglob("*.swift"):
+        try:
+            content = swift.read_text()
+        except (OSError, UnicodeDecodeError):
+            continue
+        if assignment not in content:
+            continue
+        new_content = init_param_re.sub(r"\1? = nil", content)
+        if new_content != content:
+            _write_patched_source(swift, new_content)
 
 
 def _replace_on_line(
@@ -803,6 +996,24 @@ def _replace_on_line(
     lines = content.split("\n")
     if 1 <= line_no <= len(lines):
         lines[line_no - 1] = pattern.sub(replacement, lines[line_no - 1], count=1)
+    return "\n".join(lines)
+
+
+def _rewrite_swiftui_core_import(content: str, line_no: int) -> str:
+    """Fix ``import SwiftUICore`` on *line_no* for Swift 6+ toolchains."""
+    lines = content.split("\n")
+    if not (1 <= line_no <= len(lines)):
+        return content
+    line = lines[line_no - 1]
+    if not re.search(r"\bimport\s+SwiftUICore\b", line):
+        return content
+    rest = "\n".join(lines[: line_no - 1] + lines[line_no:])
+    if re.search(r"^import\s+SwiftUI\b", rest, re.MULTILINE):
+        del lines[line_no - 1]
+    else:
+        lines[line_no - 1] = re.sub(
+            r"\bimport\s+SwiftUICore\b", "import SwiftUI", line, count=1
+        )
     return "\n".join(lines)
 
 
@@ -865,6 +1076,19 @@ def _apply_compiler_fixits(xcodebuild_output: str, work_dir: Path) -> int:
         path, content = loaded
         for pat, rep in _build_rename_replacements(m.group("old"), m.group("new")):
             content = pat.sub(rep, content)
+        file_state[path] = content
+
+    swiftui_core_by_file: dict[Path, list[int]] = {}
+    for m in _SWIFTUICORE_IMPORT_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, _ = loaded
+        swiftui_core_by_file.setdefault(path, []).append(int(m.group("line")))
+    for path, line_nos in swiftui_core_by_file.items():
+        content = file_state[path]
+        for ln in sorted(set(line_nos), reverse=True):
+            content = _rewrite_swiftui_core_import(content, ln)
         file_state[path] = content
 
     for m in _IMPLICIT_FINAL_DIAGNOSTIC.finditer(xcodebuild_output):
@@ -948,6 +1172,69 @@ def _apply_compiler_fixits(xcodebuild_output: str, work_dir: Path) -> int:
             new_member,
         )
 
+    # Hashable conformance — Apollo's pre-Swift-5 codegen relied on implicit
+    # synthesis.  The cited file usually only USES the type; the declaration
+    # lives elsewhere, so search the worktree for it.
+    seen_types: set[str] = set()
+    for m in _HASHABLE_CONFORMANCE_DIAGNOSTIC.finditer(xcodebuild_output):
+        type_name = m.group("type")
+        if type_name in seen_types:
+            continue
+        seen_types.add(type_name)
+        decl_path = _find_type_decl_file(work_dir, type_name)
+        if decl_path is None:
+            continue
+        if decl_path not in file_state:
+            file_state[decl_path] = decl_path.read_text()
+        file_state[decl_path] = _add_hashable_conformance(
+            file_state[decl_path], type_name
+        )
+
+    for m in _NSATTR_KEY_CONVERSION_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, content = loaded
+        file_state[path] = _replace_on_line(
+            content, int(m.group("line")), _NSATTR_KEY_RAWVALUE, r"\1"
+        )
+
+    # `'self' used before 'super.init'` — group by file and apply descending
+    # so each line removal doesn't shift later diagnostic line numbers.
+    self_super_by_file: dict[Path, list[int]] = {}
+    self_super_props_by_file: dict[Path, list[str]] = {}
+    for m in _SELF_BEFORE_SUPER_INIT_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, _ = loaded
+        self_super_by_file.setdefault(path, []).append(int(m.group("line")))
+    for path, line_nos in self_super_by_file.items():
+        content = file_state[path]
+        for ln in sorted(set(line_nos), reverse=True):
+            arg_line = (
+                content.split("\n")[ln - 1] if ln <= content.count("\n") + 1 else ""
+            )
+            param_m = re.match(r"^\s*(\w+)\s*:\s*self\s*,?\s*$", arg_line)
+            new_content = _hoist_self_from_super_init(content, ln)
+            if new_content is not None:
+                content = new_content
+                if param_m is not None:
+                    self_super_props_by_file.setdefault(path, []).append(
+                        param_m.group(1)
+                    )
+        file_state[path] = content
+    # If we hoisted a `<prop>: self` arg, the parent class likely keeps
+    # `<prop>` private and its init still demands a value.  Promote the
+    # property to internal and relax the init param to optional+nil so the
+    # new external assignment compiles.
+    hoisted_props: set[str] = {
+        prop for props in self_super_props_by_file.values() for prop in props
+    }
+    for prop in hoisted_props:
+        _relax_private_property(work_dir, prop)
+        _make_init_param_optional(work_dir, prop)
+
     modified = 0
     for path, new_content in file_state.items():
         original = path.read_text()
@@ -995,6 +1282,47 @@ def _patch_pageboy_management_swift(content: str) -> str:
         )
 
     return _PAGE_LEGACY_OPTIONS_ELSE.sub(_repl_else, content)
+
+
+# AzooKey: conditional second llama XCFramework duplicates KanaKanji's llama.cpp embed.
+_AZOOKEY_PACKAGE_LL_DUP_GUARD = re.compile(
+    r"#if canImport\(FoundationModels\)\r?\n"
+    r"let isXcodeVersion26 = true\r?\n"
+    r"#else\r?\n"
+    r"let isXcodeVersion26 = false\r?\n"
+    r"#endif",
+)
+_AZOOKEY_PACKAGE_LL_DUP_REPLACE = (
+    "// Duplicate llama embed vs. AzooKeyKanaKanjiConverter (anvil)\n"
+    "let isXcodeVersion26 = false"
+)
+
+
+def _maybe_patch_azookey_duplicate_llama(work_dir: Path) -> None:
+    pkg = work_dir / "AzooKeyCore" / "Package.swift"
+    if not pkg.is_file():
+        return
+    text = pkg.read_text()
+    patched = _AZOOKEY_PACKAGE_LL_DUP_GUARD.sub(
+        _AZOOKEY_PACKAGE_LL_DUP_REPLACE, text, count=1
+    )
+    if patched == text:
+        if 'name: "llama",' in text and "#if canImport(FoundationModels)" in text:
+            logger.warning("AzooKeyCore/Package.swift: llama patch pattern mismatch")
+        return
+    _write_patched_source(pkg, patched)
+    logger.info("Patched AzooKeyCore/Package.swift for duplicate llama")
+
+
+def _run_pre_build_patches(xcode_config: dict, work_dir: Path) -> None:
+    """Apply Podfile / pbxproj / pod source patches and run pre-build commands."""
+    _maybe_patch_azookey_duplicate_llama(work_dir)
+    _patch_podfile_build_settings(
+        work_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET, _MIN_SWIFT_VERSION
+    )
+    _bump_main_project_min_ios(xcode_config, work_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET)
+    _run_pre_build_commands(xcode_config, work_dir)
+    _patch_pod_sources(work_dir)
 
 
 def _patch_pod_sources(work_dir: Path) -> None:
@@ -1074,6 +1402,26 @@ def _render_testable_entry(
         f"            </BuildableReference>\n"
         f"         </TestableReference>\n"
     )
+
+
+def _insert_testable_into_scheme(
+    scheme_path: Path, test_target: str, testable_entry: str
+) -> None:
+    """Add *testable_entry* to an existing scheme's <Testables> block."""
+    scheme_xml = scheme_path.read_text()
+    if test_target in scheme_xml:
+        return
+    if "      <Testables>\n      </Testables>" in scheme_xml:
+        scheme_xml = scheme_xml.replace(
+            "      <Testables>\n      </Testables>",
+            f"      <Testables>\n{testable_entry}      </Testables>",
+        )
+    elif "      </Testables>" in scheme_xml:
+        scheme_xml = scheme_xml.replace(
+            "      </Testables>",
+            f"{testable_entry}      </Testables>",
+        )
+    scheme_path.write_text(scheme_xml)
 
 
 def _render_minimal_scheme(
@@ -1183,19 +1531,7 @@ def _ensure_shared_scheme(
 
     if scheme_path.exists():
         if testable_entry:
-            scheme_xml = scheme_path.read_text()
-            if test_target not in scheme_xml:
-                if "      <Testables>\n      </Testables>" in scheme_xml:
-                    scheme_xml = scheme_xml.replace(
-                        "      <Testables>\n      </Testables>",
-                        f"      <Testables>\n{testable_entry}      </Testables>",
-                    )
-                elif "      </Testables>" in scheme_xml:
-                    scheme_xml = scheme_xml.replace(
-                        "      </Testables>",
-                        f"{testable_entry}      </Testables>",
-                    )
-                scheme_path.write_text(scheme_xml)
+            _insert_testable_into_scheme(scheme_path, test_target, testable_entry)
         return
 
     host_target_uuid = _lookup_pbx_target_uuid(pbx, scheme_name)
@@ -1440,14 +1776,8 @@ class XcodeBuildCache:
             ]
         )
 
-        _patch_podfile_build_settings(
-            work_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET, _MIN_SWIFT_VERSION
-        )
-        _bump_main_project_min_ios(
-            xcode_config, work_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET
-        )
-        _run_pre_build_commands(xcode_config, work_dir)
-        _patch_pod_sources(work_dir)
+        _maybe_init_git_submodules(work_dir)
+        _run_pre_build_patches(xcode_config, work_dir)
         _ensure_shared_scheme(
             xcode_config, work_dir, xcode_config.get(XCODE_CONFIG_SCHEME, "")
         )
@@ -1475,15 +1805,21 @@ class XcodeBuildCache:
             if result.returncode != 0 and _is_package_resolution_failure(
                 result.stdout, result.stderr
             ):
+                excerpt = _format_build_errors(
+                    result.stderr, result.stdout, max_lines=20, fallback_chars=2400
+                )
                 typer.echo(
                     f"  Package resolution failed for {repo_name}@{base_commit[:8]}"
                     " — retrying once...",
                     err=True,
                 )
+                if excerpt.strip():
+                    typer.echo(f"  xcodebuild output (truncated):\n{excerpt}", err=True)
                 typer.echo(
-                    "  SwiftPM clones over HTTPS without a TTY; use `gh auth login` "
-                    "(recommended) or configure Git credentials / GITHUB_TOKEN so "
-                    "github.com access works non-interactively.",
+                    "  Tip: run `gh auth login` so a token exists; Anvil passes it as "
+                    "GITHUB_TOKEN and configures `gh auth git-credential` for "
+                    "https://github.com (non-interactive). If this persists, read the "
+                    "truncated output above (often rate limits, bad revision, or network).",
                     err=True,
                 )
                 resolve_cmd = _build_resolve_packages_cmd(xcode_config, work_dir)
@@ -1592,6 +1928,37 @@ class XcodeBuildCache:
             )
         )
 
+    @staticmethod
+    def _run_warm_build(
+        cmd: list[str],
+        cwd: Path,
+        timeout: int,
+        dd_dir: Path,
+        dummy_file: Path,
+        label: str,
+        repo_name: str,
+        base_commit: str,
+    ) -> None:
+        """Run a warm build; clean up the dummy + DD on timeout/failure and raise."""
+        try:
+            result = _run_xcodebuild(cmd, str(cwd), timeout)
+        except subprocess.TimeoutExpired:
+            dummy_file.unlink(missing_ok=True)
+            shutil.rmtree(dd_dir, ignore_errors=True)
+            raise RuntimeError(
+                f"{label} DerivedData warm timed out for {repo_name}@{base_commit[:8]}"
+            )
+        dummy_file.unlink(missing_ok=True)
+        if result.returncode != 0:
+            summary = _format_build_errors(
+                result.stderr, result.stdout, max_lines=5, fallback_chars=300
+            )
+            shutil.rmtree(dd_dir, ignore_errors=True)
+            raise RuntimeError(
+                f"{label} DerivedData warm failed for {repo_name}@{base_commit[:8]}:\n"
+                f"{summary}"
+            )
+
     def _warm_test_dd(
         self,
         xcode_config: dict,
@@ -1648,30 +2015,17 @@ class XcodeBuildCache:
         test_cmd, test_cwd = test_cmd_info
         test_cmd = _as_build_for_testing(test_cmd)
 
-        build_timeout = _build_timeout(xcode_config)
         typer.echo(f"  Warming test DerivedData for {repo_name}@{base_commit[:8]}...")
-        try:
-            result = _run_xcodebuild(test_cmd, str(test_cwd), build_timeout)
-        except subprocess.TimeoutExpired:
-            dummy_file.unlink(missing_ok=True)
-            shutil.rmtree(test_dd_dir, ignore_errors=True)
-            raise RuntimeError(
-                f"Test DerivedData warm timed out for {repo_name}@{base_commit[:8]}"
-            )
-        dummy_file.unlink(missing_ok=True)
-
-        if result.returncode != 0:
-            summary = _format_build_errors(
-                result.stderr,
-                result.stdout,
-                max_lines=5,
-                fallback_chars=300,
-            )
-            shutil.rmtree(test_dd_dir, ignore_errors=True)
-            raise RuntimeError(
-                f"Test DerivedData warm failed for {repo_name}@{base_commit[:8]}:\n"
-                f"{summary}"
-            )
+        self._run_warm_build(
+            test_cmd,
+            test_cwd,
+            _build_timeout(xcode_config),
+            test_dd_dir,
+            dummy_file,
+            "Test",
+            repo_name,
+            base_commit,
+        )
 
     def _warm_app_test_dd(
         self,
@@ -1721,32 +2075,19 @@ class XcodeBuildCache:
         cmd, cwd = cmd_info
         cmd = _as_build_for_testing(cmd)
 
-        build_timeout = _build_timeout(xcode_config)
         typer.echo(
             f"  Warming app-test DerivedData for {repo_name}@{base_commit[:8]}..."
         )
-        try:
-            result = _run_xcodebuild(cmd, str(cwd), build_timeout)
-        except subprocess.TimeoutExpired:
-            dummy_file.unlink(missing_ok=True)
-            shutil.rmtree(app_test_dd, ignore_errors=True)
-            raise RuntimeError(
-                f"App-test DerivedData warm timed out for {repo_name}@{base_commit[:8]}"
-            )
-        dummy_file.unlink(missing_ok=True)
-
-        if result.returncode != 0:
-            summary = _format_build_errors(
-                result.stderr,
-                result.stdout,
-                max_lines=5,
-                fallback_chars=300,
-            )
-            shutil.rmtree(app_test_dd, ignore_errors=True)
-            raise RuntimeError(
-                f"App-test DerivedData warm failed for {repo_name}@{base_commit[:8]}:\n"
-                f"{summary}"
-            )
+        self._run_warm_build(
+            cmd,
+            cwd,
+            _build_timeout(xcode_config),
+            app_test_dd,
+            dummy_file,
+            "App-test",
+            repo_name,
+            base_commit,
+        )
 
     def checkout(
         self,
@@ -1788,6 +2129,8 @@ class XcodeBuildCache:
             ]
         )
 
+        _maybe_init_git_submodules(target_dir)
+
         if copy_derived_data:
             # Clone each DerivedData dir and strip ModuleCache so Xcode rebuilds it
             # cheaply while still reusing compiled products.
@@ -1806,14 +2149,7 @@ class XcodeBuildCache:
 
         if xcode_config:
             if run_pre_build:
-                _patch_podfile_build_settings(
-                    target_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET, _MIN_SWIFT_VERSION
-                )
-                _bump_main_project_min_ios(
-                    xcode_config, target_dir, _MIN_IPHONEOS_DEPLOYMENT_TARGET
-                )
-                _run_pre_build_commands(xcode_config, target_dir)
-                _patch_pod_sources(target_dir)
+                _run_pre_build_patches(xcode_config, target_dir)
             self._restore_package_resolved(
                 xcode_config, repo_name, base_commit, target_dir
             )
@@ -1824,19 +2160,8 @@ class XcodeBuildCache:
         """Remove a worktree created by checkout()."""
         clone_dir = self.repo_clone_dir(repo_name)
         if clone_dir.exists():
-            _run_cmd(
-                [
-                    "git",
-                    "-C",
-                    str(clone_dir),
-                    "worktree",
-                    "remove",
-                    "--force",
-                    str(target_dir),
-                ],
-                check=False,
-            )
-        if target_dir.exists():
+            _remove_worktree(clone_dir, target_dir)
+        elif target_dir.exists():
             shutil.rmtree(target_dir, ignore_errors=True)
 
 
@@ -1866,22 +2191,21 @@ def _as_build_for_testing(cmd: list[str]) -> list[str]:
 def _resolve_project_args(xcode_config: dict, work_dir: Path) -> list[str]:
     """Resolve -workspace/-project args, preferring workspace when it exists."""
     workspace, workspace_path = resolve_repo_relative_path(
-        xcode_config.get("workspace", ""),
-        work_dir,
+        xcode_config.get("workspace", ""), work_dir
     )
     project, project_path = resolve_repo_relative_path(
-        xcode_config.get(XCODE_CONFIG_PROJECT, ""),
-        work_dir,
+        xcode_config.get(XCODE_CONFIG_PROJECT, ""), work_dir
     )
-
-    if workspace_path and workspace_path.exists():
-        return ["-workspace", str(workspace_path)]
-    elif project_path and project_path.exists():
-        return ["-project", str(project_path)]
-    elif workspace:
-        return ["-workspace", str(workspace_path)]
-    elif project:
-        return ["-project", str(project_path)]
+    candidates = [
+        ("-workspace", workspace, workspace_path),
+        ("-project", project, project_path),
+    ]
+    for flag, _, path in candidates:
+        if path and path.exists():
+            return [flag, str(path)]
+    for flag, name, path in candidates:
+        if name:
+            return [flag, str(path)]
     return []
 
 
@@ -2018,11 +2342,9 @@ def _inject_test_target(
 ) -> bool:
     """Inject a test target (unit-test or UI-test) into the Xcode project.
 
-    Writes pbxproj sections, wires the scheme's TestAction, creates Info.plist
-    and a placeholder Swift file.  Used by both :func:`inject_app_test_target`
-    (unit tests) and :func:`inject_ui_test_target` (UI tests).
-
-    Returns True on success, False when skipped or failed.
+    Writes pbxproj sections, wires the scheme's TestAction, and creates a
+    placeholder Info.plist + Swift file.  Returns True on success, False when
+    skipped or failed.
     """
     if not test_target or not files_dest or not project_rel:
         return False
@@ -2058,36 +2380,25 @@ def _inject_test_target(
         ]
     }
 
-    # Discover the host app target UUID and project object UUID from pbxproj
-    m = re.search(
-        r"(\w{24}) /\* "
-        + re.escape(xcode_config.get(XCODE_CONFIG_SCHEME, ""))
-        + r" \*/ = \{\s*isa = PBXNativeTarget;",
-        pbx,
-    )
-    if not m:
+    host_scheme = xcode_config.get(XCODE_CONFIG_SCHEME, "")
+    host_target_uuid = _lookup_pbx_target_uuid(pbx, host_scheme)
+    if not host_target_uuid:
         logger.warning("Could not find host app target in pbxproj")
         return False
-    host_target_uuid = m.group(1)
 
     m = re.search(r"rootObject = (\w{24})", pbx)
     if not m:
         return False
     project_uuid = m.group(1)
 
-    # Find the Products group UUID
     m = re.search(r"productRefGroup = (\w{24})", pbx)
     products_group_uuid = m.group(1) if m else None
 
-    # Find the main group UUID
     m = re.search(r"mainGroup = (\w{24})", pbx)
     main_group_uuid = m.group(1) if m else None
 
-    # Discover the app's PRODUCT_NAME for TEST_HOST (unit tests only)
-    m = re.search(r"productReference = \w{24} /\* (.+?)\.app \*/", pbx)
-    app_product_name = m.group(1) if m else xcode_config.get(XCODE_CONFIG_SCHEME, "")
+    app_product_name = _lookup_pbx_product_name(pbx, host_target_uuid, host_scheme)
 
-    # 1. PBXBuildFile
     pbx = pbx.replace(
         "/* End PBXBuildFile section */",
         f"\t\t{uid['placeholder_build']} /* {test_target}Placeholder.swift in Sources */  = "
@@ -2095,14 +2406,13 @@ def _inject_test_target(
         "/* End PBXBuildFile section */",
     )
 
-    # 2. PBXContainerItemProxy
     proxy_block = (
         f"\t\t{uid['container_proxy']} /* PBXContainerItemProxy */ = {{\n"
         f"\t\t\tisa = PBXContainerItemProxy;\n"
         f"\t\t\tcontainerPortal = {project_uuid} /* Project object */;\n"
         f"\t\t\tproxyType = 1;\n"
         f"\t\t\tremoteGlobalIDString = {host_target_uuid};\n"
-        f"\t\t\tremoteInfo = {xcode_config.get('scheme', '')};\n"
+        f"\t\t\tremoteInfo = {host_scheme};\n"
         f"\t\t}};\n"
     )
     if "/* End PBXContainerItemProxy section */" in pbx:
@@ -2119,7 +2429,6 @@ def _inject_test_target(
             "/* Begin PBXCopyFilesBuildPhase section */",
         )
 
-    # 3. PBXFileReference
     pbx = pbx.replace(
         "/* End PBXFileReference section */",
         f"\t\t{uid['info_plist_ref']} /* Info.plist */ = "
@@ -2131,7 +2440,6 @@ def _inject_test_target(
         "/* End PBXFileReference section */",
     )
 
-    # 4. PBXFrameworksBuildPhase
     pbx = pbx.replace(
         "/* End PBXFrameworksBuildPhase section */",
         f"\t\t{uid['frameworks_phase']} /* Frameworks */ = {{\n"
@@ -2142,7 +2450,6 @@ def _inject_test_target(
         "/* End PBXFrameworksBuildPhase section */",
     )
 
-    # 5. PBXGroup for the test target
     pbx = pbx.replace(
         "/* End PBXGroup section */",
         f"\t\t{uid['group']} /* {test_target} */ = {{\n"
@@ -2156,7 +2463,6 @@ def _inject_test_target(
         "/* End PBXGroup section */",
     )
 
-    # Add group to main group and product to Products group
     if main_group_uuid and products_group_uuid:
         pbx = pbx.replace(
             f"{products_group_uuid} /* Products */,",
@@ -2176,7 +2482,6 @@ def _inject_test_target(
                 + pbx[insert_pos:]
             )
 
-    # 6. PBXNativeTarget
     pbx = pbx.replace(
         "/* End PBXNativeTarget section */",
         f"\t\t{uid['target']} /* {test_target} */ = {{\n"
@@ -2199,7 +2504,6 @@ def _inject_test_target(
         "/* End PBXNativeTarget section */",
     )
 
-    # 7. Add to project targets list
     pbx = re.sub(
         rf"(targets = \([^)]*{re.escape(host_target_uuid)}[^)]*)\);",
         rf"\1\t\t\t\t{uid['target']} /* {test_target} */,\n\t\t\t);",
@@ -2207,7 +2511,6 @@ def _inject_test_target(
         count=1,
     )
 
-    # 8. TargetAttributes
     m = re.search(r"(TargetAttributes = \{.*?)((\s*\};){2})", pbx, re.DOTALL)
     if m:
         insert_at = m.start(2)
@@ -2219,7 +2522,6 @@ def _inject_test_target(
         )
         pbx = pbx[:insert_at] + attr_block + pbx[insert_at:]
 
-    # 9. PBXResourcesBuildPhase
     pbx = pbx.replace(
         "/* End PBXResourcesBuildPhase section */",
         f"\t\t{uid['resources_phase']} /* Resources */ = {{\n"
@@ -2230,7 +2532,6 @@ def _inject_test_target(
         "/* End PBXResourcesBuildPhase section */",
     )
 
-    # 10. PBXSourcesBuildPhase
     pbx = pbx.replace(
         "/* End PBXSourcesBuildPhase section */",
         f"\t\t{uid['sources_phase']} /* Sources */ = {{\n"
@@ -2243,11 +2544,10 @@ def _inject_test_target(
         "/* End PBXSourcesBuildPhase section */",
     )
 
-    # 11. PBXTargetDependency
     dep_block = (
         f"\t\t{uid['target_dep']} /* PBXTargetDependency */ = {{\n"
         f"\t\t\tisa = PBXTargetDependency;\n"
-        f"\t\t\ttarget = {host_target_uuid} /* {xcode_config.get('scheme', '')} */;\n"
+        f"\t\t\ttarget = {host_target_uuid} /* {host_scheme} */;\n"
         f"\t\t\ttargetProxy = {uid['container_proxy']} /* PBXContainerItemProxy */;\n"
         f"\t\t}};\n"
     )
@@ -2265,7 +2565,6 @@ def _inject_test_target(
             "/* Begin XCBuildConfiguration section */",
         )
 
-    # 12. XCBuildConfiguration (Debug + Release)
     iphoneos_target = xcode_config.get("iphoneos_deployment_target", "14.0")
 
     dev_team = xcode_config.get("development_team", "")
@@ -2313,7 +2612,6 @@ def _inject_test_target(
             "/* End XCBuildConfiguration section */",
         )
 
-    # 13. XCConfigurationList
     pbx = pbx.replace(
         "/* End XCConfigurationList section */",
         f'\t\t{uid["config_list"]} /* Build configuration list for PBXNativeTarget "{test_target}" */ = {{\n'
@@ -2329,102 +2627,25 @@ def _inject_test_target(
 
     pbxproj_path.write_text(pbx)
 
-    # Update scheme to include test target in TestAction
     scheme_dir = work_dir / project_rel / "xcshareddata" / "xcschemes"
     scheme_path = scheme_dir / (scheme_name + ".xcscheme")
-    testable_entry = (
-        f"         <TestableReference\n"
-        f'            skipped = "NO">\n'
-        f"            <BuildableReference\n"
-        f'               BuildableIdentifier = "primary"\n'
-        f'               BlueprintIdentifier = "{uid["target"]}"\n'
-        f'               BuildableName = "{test_target}.xctest"\n'
-        f'               BlueprintName = "{test_target}"\n'
-        f'               ReferencedContainer = "container:{project_rel.split("/")[-1]}">\n'
-        f"            </BuildableReference>\n"
-        f"         </TestableReference>\n"
-    )
+    proj_container = project_rel.split("/")[-1]
+    testable_entry = _render_testable_entry(test_target, uid["target"], proj_container)
     if scheme_path.exists():
-        scheme_xml = scheme_path.read_text()
-        if test_target not in scheme_xml:
-            if "      <Testables>\n      </Testables>" in scheme_xml:
-                scheme_xml = scheme_xml.replace(
-                    "      <Testables>\n      </Testables>",
-                    f"      <Testables>\n{testable_entry}      </Testables>",
-                )
-            elif "      </Testables>" in scheme_xml:
-                scheme_xml = scheme_xml.replace(
-                    "      </Testables>",
-                    f"{testable_entry}      </Testables>",
-                )
-            scheme_path.write_text(scheme_xml)
+        _insert_testable_into_scheme(scheme_path, test_target, testable_entry)
     else:
-        # No saved scheme file (some early commits lack xcshareddata).
-        # Create a minimal scheme so xcodebuild finds the injected test target
-        # in the TestAction and includes it in the generated xctestrun file.
         scheme_dir.mkdir(parents=True, exist_ok=True)
-        proj_container = project_rel.split("/")[-1]
-        minimal_scheme = (
-            '<?xml version="1.0" encoding="UTF-8"?>\n'
-            "<Scheme\n"
-            '   LastUpgradeVersion = "1620"\n'
-            '   version = "1.7">\n'
-            "   <BuildAction\n"
-            '      parallelizeBuildables = "YES"\n'
-            '      buildImplicitly = "YES">\n'
-            "      <BuildActionEntries>\n"
-            "         <BuildActionEntry\n"
-            '            buildForTesting = "YES"\n'
-            '            buildForRunning = "YES"\n'
-            '            buildForProfiling = "YES"\n'
-            '            buildForArchiving = "YES"\n'
-            '            buildForAnalyzing = "YES">\n'
-            "            <BuildableReference\n"
-            '               BuildableIdentifier = "primary"\n'
-            f'               BlueprintIdentifier = "{host_target_uuid}"\n'
-            f'               BuildableName = "{app_product_name}.app"\n'
-            f'               BlueprintName = "{scheme_name}"\n'
-            f'               ReferencedContainer = "container:{proj_container}">\n'
-            "            </BuildableReference>\n"
-            "         </BuildActionEntry>\n"
-            "      </BuildActionEntries>\n"
-            "   </BuildAction>\n"
-            "   <TestAction\n"
-            '      buildConfiguration = "Debug"\n'
-            '      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"\n'
-            '      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"\n'
-            '      shouldUseLaunchSchemeArgsEnv = "YES">\n'
-            "      <Testables>\n"
-            f"{testable_entry}"
-            "      </Testables>\n"
-            "   </TestAction>\n"
-            "   <LaunchAction\n"
-            '      buildConfiguration = "Debug"\n'
-            '      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"\n'
-            '      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"\n'
-            '      launchStyle = "0"\n'
-            '      useCustomWorkingDirectory = "NO"\n'
-            '      ignoresPersistentStateOnLaunch = "NO"\n'
-            '      debugDocumentVersioning = "YES"\n'
-            '      debugServiceExtension = "internal"\n'
-            '      allowLocationSimulation = "YES">\n'
-            "      <BuildableProductRunnable\n"
-            '         runnableDebuggingMode = "0">\n'
-            "         <BuildableReference\n"
-            '            BuildableIdentifier = "primary"\n'
-            f'            BlueprintIdentifier = "{host_target_uuid}"\n'
-            f'            BuildableName = "{app_product_name}.app"\n'
-            f'            BlueprintName = "{scheme_name}"\n'
-            f'            ReferencedContainer = "container:{proj_container}">\n'
-            "         </BuildableReference>\n"
-            "      </BuildableProductRunnable>\n"
-            "   </LaunchAction>\n"
-            "</Scheme>\n"
+        scheme_path.write_text(
+            _render_minimal_scheme(
+                scheme_name,
+                host_target_uuid,
+                app_product_name,
+                proj_container,
+                testable_entry,
+            )
         )
-        scheme_path.write_text(minimal_scheme)
         logger.info("Created minimal scheme file at %s", scheme_path)
 
-    # Create Info.plist and placeholder test file on disk
     test_dir = work_dir / files_dest
     test_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2448,15 +2669,11 @@ def _inject_test_target(
 
     placeholder_path = test_dir / f"{test_target}Placeholder.swift"
     if not placeholder_path.exists():
+        # UI tests reach the app via its public interface — @testable is rejected.
+        # Unit tests link against the app binary, so @testable import resolves.
         if is_ui_test:
-            # UI tests access the app through its public interface; @testable import is not allowed.
-            placeholder_path.write_text(
-                f"import XCTest\n\n"
-                f"final class {test_target}Placeholder: XCTestCase {{\n"
-                f"    func testPlaceholder() {{ XCTAssertTrue(true) }}\n}}\n"
-            )
+            imports = "import XCTest\n"
         else:
-            # Unit tests link against the app binary so @testable import works.
             module_name = xcode_config.get(
                 "app_test_module", xcode_config.get(XCODE_CONFIG_SCHEME, "")
             )
@@ -2467,15 +2684,17 @@ def _inject_test_target(
                 re.DOTALL,
             )
             if host_m:
-                product_name = host_m.group(1).strip()[:-4]  # strip .app
-                detected = product_name.replace(" ", "_").replace("-", "_")
+                detected = (
+                    host_m.group(1).strip()[:-4].replace(" ", "_").replace("-", "_")
+                )
                 if detected:
                     module_name = detected
-            placeholder_path.write_text(
-                f"import XCTest\n@testable import {module_name}\n\n"
-                f"final class {test_target}Placeholder: XCTestCase {{\n"
-                f"    func testPlaceholder() {{ XCTAssertTrue(true) }}\n}}\n"
-            )
+            imports = f"import XCTest\n@testable import {module_name}\n"
+        placeholder_path.write_text(
+            f"{imports}\n"
+            f"final class {test_target}Placeholder: XCTestCase {{\n"
+            f"    func testPlaceholder() {{ XCTAssertTrue(true) }}\n}}\n"
+        )
 
     logger.info(
         "Injected %s target (%s) into %s", test_target, product_type, pbxproj_path
@@ -2484,11 +2703,7 @@ def _inject_test_target(
 
 
 def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
-    """Inject a unit-test target into the Xcode project.
-
-    Thin wrapper around :func:`_inject_test_target` using ``app_test_*`` config
-    keys and ``com.apple.product-type.bundle.unit-test``.
-    """
+    """Inject a unit-test target (``app_test_*`` config keys) into the Xcode project."""
     return _inject_test_target(
         xcode_config,
         work_dir,
@@ -2505,12 +2720,10 @@ def inject_app_test_target(xcode_config: dict, work_dir: Path) -> bool:
 
 
 def inject_ui_test_target(xcode_config: dict, work_dir: Path) -> bool:
-    """Inject a UI-test target into the Xcode project.
+    """Inject a UI-test target (``ui_test_*`` config keys) into the Xcode project.
 
-    Thin wrapper around :func:`_inject_test_target` using ``ui_test_*`` config
-    keys and ``com.apple.product-type.bundle.ui-testing``.  UI test bundles
-    launch the app externally and do not link against it, so ``BUNDLE_LOADER``
-    and ``TEST_HOST`` are omitted from the build settings.
+    UI-test bundles launch the app externally and do not link against it, so
+    ``BUNDLE_LOADER`` and ``TEST_HOST`` are omitted from the build settings.
     """
     return _inject_test_target(
         xcode_config,
@@ -2586,6 +2799,46 @@ def _build_xcodebuild_app_test_cmd(
     return cmd, work_dir
 
 
+def _apply_swiftpm_git_github_auth(env: dict[str, str]) -> None:
+    """Use ``gh auth git-credential`` for https://github.com when ``gh`` is logged in.
+
+    Applied via ephemeral ``GIT_CONFIG_*`` env vars so SwiftPM's nested ``git``
+    calls authenticate without global ``git config`` or a TTY.
+
+    Also sets ``GITHUB_TOKEN`` / ``GH_TOKEN`` for tools that read them, and clears
+    the generic ``credential.helper`` for this process so ``osxkeychain`` cannot
+    pop a blocking login UI before the GitHub-specific helper runs.
+    """
+    gh = shutil.which("gh")
+    if not gh:
+        return
+    proc = subprocess.run(
+        [gh, "auth", "token"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        stdin=subprocess.DEVNULL,
+    )
+    if proc.returncode != 0 or not (proc.stdout or "").strip():
+        logger.debug(
+            "gh auth token unavailable; SwiftPM will use existing Git config only"
+        )
+        return
+    token = (proc.stdout or "").strip()
+    env["GITHUB_TOKEN"] = token
+    env["GH_TOKEN"] = token
+    try:
+        n = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
+    except ValueError:
+        n = 0
+    env[f"GIT_CONFIG_KEY_{n}"] = "credential.helper"
+    env[f"GIT_CONFIG_VALUE_{n}"] = ""
+    env[f"GIT_CONFIG_KEY_{n + 1}"] = "credential.https://github.com.helper"
+    env[f"GIT_CONFIG_VALUE_{n + 1}"] = f"!{gh} auth git-credential"
+    env["GIT_CONFIG_COUNT"] = str(n + 2)
+    logger.debug("Injected gh auth + non-interactive GitHub credentials for SwiftPM")
+
+
 def _run_cmd(
     cmd: list[str], check: bool = True, **kwargs
 ) -> subprocess.CompletedProcess:
@@ -2616,7 +2869,11 @@ def _run_xcodebuild(
 
     Stdin is closed and ``GIT_TERMINAL_PROMPT=0`` so nested ``git`` calls for
     SwiftPM cannot block on an interactive password prompt (convert-dataset /
-    cache warm must run unattended).
+    cache warm must run unattended). When ``gh auth token`` succeeds, ephemeral
+    Git config clears the generic ``credential.helper`` for this process (so
+    ``osxkeychain`` does not block headless resolves), sets
+    ``credential.https://github.com.helper`` → ``gh auth git-credential``, and
+    exports ``GITHUB_TOKEN`` / ``GH_TOKEN``.
     """
     import tempfile
 
@@ -2627,6 +2884,7 @@ def _run_xcodebuild(
     env = os.environ.copy()
     env["TMPDIR"] = str(tmpdir)
     env["GIT_TERMINAL_PROMPT"] = "0"
+    _apply_swiftpm_git_github_auth(env)
     proc = subprocess.Popen(
         cmd,
         cwd=cwd,
