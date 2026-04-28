@@ -27,6 +27,10 @@ The implementation must expose these names (tests depend on them to compile):
 ```
 
 Rules:
+- Write the entire task.md in English. If the PR title or description is not in \
+English, translate it faithfully; keep proper nouns, product names, and UI \
+strings that must stay localized when they are requirements (e.g. exact button \
+labels) as given or note both if needed.
 - Type is "Feature" for new functionality, "Fix" for bug fixes.
 - Problem Description should explain the user-facing problem, not the solution.
 - Acceptance Criteria should describe WHAT the system must do, not HOW to \
@@ -176,9 +180,11 @@ immediately present.
 - Include MARK comments referencing which acceptance criteria each test covers.
 - If `task.md` includes `### UI tests` with **Not applicable.**, or the task is \
 otherwise purely non-UI (no user-visible surfaces to exercise), output **exactly** \
-an empty string: no Swift, no whitespace, no placeholder class, no comments.
-- Output ONLY the Swift source code when UI tests are in scope, no markdown \
-fences or explanation.
+one Swift line comment in English, e.g. \
+`// No UI tests applicable for this task.` \
+Do not output bare prose (always use a `//` line). Do not output an empty string.
+- Output ONLY Swift source (full UI test class) or that single `//` line when \
+N/A — no markdown fences or explanation.
 """
 
 XCODE_CONFIG_SYSTEM = """\
@@ -341,6 +347,9 @@ You may use a markdown link for the title instead: \
 lines under each task.
 
 Rules:
+- **Language:** Task titles and any prose in the ## Tasks section must be in \
+English. If a title is in another language, translate it; keep recognizable \
+product or repo-specific names as appropriate.
 - **Do not** add `- Type:`, `- Patch:`, `- Base Commit:`, or `curl` commands — \
 base commits and patches live in harness metadata, not in repo.md.
 - **Do not** include placeholder or example tasks such as \

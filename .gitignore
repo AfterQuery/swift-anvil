@@ -24,5 +24,7 @@ tasks/firefox-ios
 tasks/iOS-Open-GPX-Tracker
 tasks/mastodon-ios
 tasks/GitHawk
+tasks/azooKey
 src/anvil/commands/github_prs/mastodon-ios.txt
 src/anvil/commands/github_prs/GitHawk.txt
+src/anvil/commands/github_prs/azooKey.txt

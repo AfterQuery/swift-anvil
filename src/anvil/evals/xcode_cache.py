@@ -136,6 +136,7 @@ def _run_pre_build_commands(xcode_config: dict, work_dir: Path) -> None:
             cwd=str(work_dir),
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
         )
         if result.returncode != 0:
             logger.warning(
@@ -1479,6 +1480,12 @@ class XcodeBuildCache:
                     " — retrying once...",
                     err=True,
                 )
+                typer.echo(
+                    "  SwiftPM clones over HTTPS without a TTY; use `gh auth login` "
+                    "(recommended) or configure Git credentials / GITHUB_TOKEN so "
+                    "github.com access works non-interactively.",
+                    err=True,
+                )
                 resolve_cmd = _build_resolve_packages_cmd(xcode_config, work_dir)
                 _run_xcodebuild(resolve_cmd, str(work_dir), build_timeout)
                 result = _run_xcodebuild(build_cmd, str(work_dir), build_timeout)
@@ -2583,6 +2590,7 @@ def _run_cmd(
     cmd: list[str], check: bool = True, **kwargs
 ) -> subprocess.CompletedProcess:
     logger.debug("Running: %s", " ".join(cmd))
+    kwargs.setdefault("stdin", subprocess.DEVNULL)
     return subprocess.run(
         cmd,
         capture_output=True,
@@ -2605,6 +2613,10 @@ def _run_xcodebuild(
     otherwise errors with "item with the same name already exists" under
     concurrency).  Rooting it under ``tempfile.gettempdir()`` (``/var/folders/...``)
     keeps it within the paths that SwiftPM's sandbox allows.
+
+    Stdin is closed and ``GIT_TERMINAL_PROMPT=0`` so nested ``git`` calls for
+    SwiftPM cannot block on an interactive password prompt (convert-dataset /
+    cache warm must run unattended).
     """
     import tempfile
 
@@ -2614,9 +2626,11 @@ def _run_xcodebuild(
     tmpdir.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["TMPDIR"] = str(tmpdir)
+    env["GIT_TERMINAL_PROMPT"] = "0"
     proc = subprocess.Popen(
         cmd,
         cwd=cwd,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
