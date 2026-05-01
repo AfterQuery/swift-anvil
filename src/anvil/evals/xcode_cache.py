@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import hashlib
 import logging
 import os
@@ -149,18 +151,87 @@ def _run_pre_build_commands(xcode_config: dict, work_dir: Path) -> None:
             )
 
 
+@contextlib.contextmanager
+def _shared_git_lock(work_dir: Path):
+    """Serialize git ops that mutate the shared ``.git/config`` of a worktree.
+
+    Worktrees created from a common bare/clone share the same ``.git/config``;
+    parallel ``git submodule update --init`` calls race on its lock and one
+    fails with ``could not lock config file ... File exists``.  Hold an
+    exclusive ``flock`` on a sentinel file inside the shared git dir so only
+    one warmer mutates submodule registrations at a time.
+    """
+    common = ""
+    try:
+        common = subprocess.run(
+            ["git", "-C", str(work_dir), "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        common = ""
+    if not common:
+        yield
+        return
+    common_path = Path(common)
+    if not common_path.is_absolute():
+        common_path = (work_dir / common_path).resolve()
+    common_path.mkdir(parents=True, exist_ok=True)
+    lock_file = common_path / "anvil-submodule.lock"
+    with open(lock_file, "w") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
 def _maybe_init_git_submodules(work_dir: Path) -> None:
-    """Run ``git submodule update --init --recursive`` if ``.gitmodules`` exists."""
+    """Best-effort ``git submodule update --init --recursive`` when ``.gitmodules`` exists.
+
+    LFS smudge is skipped — large model blobs (e.g. HuggingFace gguf submodules)
+    aren't needed to compile the Xcode targets we warm.  Non-zero exit logs a
+    warning rather than failing warm; the downstream xcodebuild step will
+    surface a clear error if a missing submodule is actually required.
+
+    Serialized across parallel warmers via a shared git-dir flock — submodule
+    init writes to the worktree-shared ``.git/config`` and races otherwise.
+    """
     if not (work_dir / ".gitmodules").is_file():
         return
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_LFS_SKIP_SMUDGE"] = "1"
     _apply_swiftpm_git_github_auth(env)
     typer.echo("  Initializing git submodules...")
-    _run_cmd(
-        ["git", "-C", str(work_dir), "submodule", "update", "--init", "--recursive"],
-        env=env,
-    )
+    cmd = [
+        "git",
+        "-C",
+        str(work_dir),
+        "submodule",
+        "update",
+        "--init",
+        "--recursive",
+        "--jobs",
+        "4",
+    ]
+    with _shared_git_lock(work_dir):
+        for attempt in (1, 2):
+            result = _run_cmd(cmd, check=False, env=env)
+            if result.returncode == 0:
+                return
+            if attempt == 1:
+                logger.warning(
+                    "Submodule init returned %d, retrying once: %s",
+                    result.returncode,
+                    (result.stderr or "")[-300:],
+                )
+        logger.warning(
+            "Submodule init failed after retry; continuing (build will fail if "
+            "any submodule data is actually required): %s",
+            (result.stderr or "")[-500:],
+        )
 
 
 # Xcode 15+ dropped libarclite (needed for iOS < 12) and Swift 4 support.
@@ -789,6 +860,16 @@ _SELF_BEFORE_SUPER_INIT_DIAGNOSTIC = re.compile(
     re.MULTILINE,
 )
 
+# "<symbol> is not available due to missing import of defining module 'X'" —
+# Swift 6+ rejects types reached only via transitive dependencies; the fix is
+# to add ``import X`` to the cited file.
+_MISSING_IMPORT_DIAGNOSTIC = re.compile(
+    r"^(?P<file>/[^:\n]+\.swift):(?P<line>\d+):(?P<col>\d+):\s*"
+    r"error: [^\n]*not available due to missing import of defining module "
+    r"'(?P<module>[\w.]+)'",
+    re.MULTILINE,
+)
+
 
 def _split_callable_name(name: str) -> tuple[str, str | None]:
     """Split ``foo(bar:)`` → (``foo``, ``bar:``); plain identifier → (name, None)."""
@@ -1017,6 +1098,24 @@ def _rewrite_swiftui_core_import(content: str, line_no: int) -> str:
     return "\n".join(lines)
 
 
+_IMPORT_LINE_RE = re.compile(r"^\s*import\s+([\w.]+)")
+
+
+def _add_missing_imports(content: str, modules: set[str]) -> str:
+    """Insert ``import <module>`` for each missing module after the last existing import."""
+    lines = content.split("\n")
+    existing = {m.group(1) for ln in lines if (m := _IMPORT_LINE_RE.match(ln))}
+    new_modules = sorted(m for m in modules if m not in existing)
+    if not new_modules:
+        return content
+    last_import_idx = max(
+        (i for i, ln in enumerate(lines) if _IMPORT_LINE_RE.match(ln)), default=-1
+    )
+    insert_at = last_import_idx + 1 if last_import_idx >= 0 else 0
+    lines[insert_at:insert_at] = [f"import {m}" for m in new_modules]
+    return "\n".join(lines)
+
+
 def _add_unknown_default(content: str, switch_line_no: int) -> str:
     """Insert ``@unknown default: break`` before the close brace of the switch on *switch_line_no*."""
     lines = content.split("\n")
@@ -1059,9 +1158,15 @@ def _apply_compiler_fixits(xcodebuild_output: str, work_dir: Path) -> int:
 
     def load(raw_path: str) -> tuple[Path, str] | None:
         path = Path(raw_path)
+        in_worktree = True
         try:
             path.relative_to(work_dir)
         except ValueError:
+            in_worktree = False
+        # Also accept SwiftPM checkouts under DerivedData; those resolve fresh
+        # on each warm, so any patch we apply only needs to stick across the
+        # current rebuild loop.
+        if not in_worktree and "/SourcePackages/checkouts/" not in str(path):
             return None
         if path not in file_state:
             if not path.exists():
@@ -1235,12 +1340,26 @@ def _apply_compiler_fixits(xcodebuild_output: str, work_dir: Path) -> int:
         _relax_private_property(work_dir, prop)
         _make_init_param_optional(work_dir, prop)
 
+    missing_imports_by_file: dict[Path, set[str]] = {}
+    for m in _MISSING_IMPORT_DIAGNOSTIC.finditer(xcodebuild_output):
+        loaded = load(m.group("file"))
+        if loaded is None:
+            continue
+        path, _ = loaded
+        missing_imports_by_file.setdefault(path, set()).add(m.group("module"))
+    for path, modules in missing_imports_by_file.items():
+        file_state[path] = _add_missing_imports(file_state[path], modules)
+
     modified = 0
     for path, new_content in file_state.items():
         original = path.read_text()
         if new_content != original:
             _write_patched_source(path, new_content)
-            logger.info("Auto-applied fix-its to %s", path.relative_to(work_dir))
+            try:
+                rel = path.relative_to(work_dir)
+            except ValueError:
+                rel = path
+            logger.info("Auto-applied fix-its to %s", rel)
             modified += 1
     return modified
 
